@@ -2,6 +2,8 @@ package org.example;
 
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
+
+import java.awt.Color;
 import java.io.IOException;
 import java.util.Scanner;
 
@@ -9,24 +11,34 @@ public class Main {
     public static void main(String[] args) throws InterruptedException, UnsupportedAudioFileException, LineUnavailableException, IOException {
         int workMinutes = getUserInput("work", 20);
         int breakMinutes = getUserInput("break", 5);
+
+        var jw = new JWindow();
+        jw.setText("BZ");
+
         while(true) {
             System.out.println("\nStarting timer...");
 
             Alarm.playBegin();
 
             int totalSeconds = workMinutes * 60;
+
+            jw.setColor(new Color(255, 111, 0) , Color.DARK_GRAY);
             for (int i = totalSeconds; i > 0; i--) {
                 String progress = getProgressBar(i, totalSeconds);
                 System.out.print("\r" + progress + " " + getTimeRemaining(i));
+                jw.setText(getTimeRemaining(i));
                 Thread.sleep(1000);
             }
 
             System.out.println("\nTime for a break!");
+            jw.setColor(Color.LIGHT_GRAY, Color.PINK);
+
             Alarm.playAlarm();
             totalSeconds = breakMinutes * 60;
             for (int i = totalSeconds; i > 0; i--) {
                 String progress = getProgressBar(i, totalSeconds);
                 System.out.print("\r" + progress + " " + getTimeRemaining(i));
+                jw.setText(getTimeRemaining(i));
                 Thread.sleep(1000);
             }
 
@@ -68,6 +80,6 @@ public class Main {
     private static String getTimeRemaining(int remainingSeconds) {
         int minutes = remainingSeconds / 60;
         int seconds = remainingSeconds % 60;
-        return String.format("%02d:%02d remaining", minutes, seconds);
+        return String.format("%02d:%02d", minutes, seconds);
     }
 }
