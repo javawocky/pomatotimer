@@ -12,7 +12,7 @@ public class Main {
         int workMinutes = getUserInput("work", 20);
         int breakMinutes = getUserInput("break", 5);
 
-        var jw = new JWindow();
+        var jw = new AppWindow();
         jw.setText("BZ");
 
         while(true) {
@@ -28,6 +28,10 @@ public class Main {
                 System.out.print("\r" + progress + " " + getTimeRemaining(i));
                 jw.setText(getTimeRemaining(i));
                 Thread.sleep(1000);
+                
+                if(jw.isSkip()) {
+break;
+                }
             }
 
             System.out.println("\nTime for a break!");
@@ -40,6 +44,9 @@ public class Main {
                 System.out.print("\r" + progress + " " + getTimeRemaining(i));
                 jw.setText(getTimeRemaining(i));
                 Thread.sleep(1000);
+                if(jw.isSkip()) {
+                    break;
+                }
             }
 
             System.out.println("\nTimer finished!");
