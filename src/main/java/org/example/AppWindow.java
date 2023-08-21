@@ -6,6 +6,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 
 public class AppWindow extends JFrame {
     private JLabel textLabel;
@@ -19,10 +21,11 @@ public class AppWindow extends JFrame {
 
         // Button Panel
         this.topNavBits = new JPanel(new FlowLayout());
+        this.topNavBits.setVisible(false);
         topNavBits.setBackground(Color.BLACK);
 
-        JButton resetButton = new JButton("Skip");
-        resetButton.addActionListener(new ActionListener() {
+        JButton skipButton = new JButton("Skip");
+        skipButton.addActionListener(new ActionListener() {
 
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -41,7 +44,7 @@ public class AppWindow extends JFrame {
 
         });
 
-        topNavBits.add(resetButton);
+        topNavBits.add(skipButton);
         topNavBits.add(exitButton);
 
         add(topNavBits, BorderLayout.NORTH);
@@ -49,6 +52,31 @@ public class AppWindow extends JFrame {
         textLabel = new JLabel();
         textLabel.setHorizontalAlignment(SwingConstants.CENTER);
         textLabel.setVerticalAlignment(SwingConstants.CENTER);
+
+        textLabel.addMouseListener(new MouseListener() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                toggleNavVisible();
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+            }
+
+        });
         add(textLabel, BorderLayout.CENTER);
 
         addComponentListener(new ComponentAdapter() {
@@ -103,6 +131,11 @@ public class AppWindow extends JFrame {
 
     private void resetTimer() {
         this.skip = true;
+        this.topNavBits.setVisible(false);
+
     }
 
+    private void toggleNavVisible() {
+        this.topNavBits.setVisible(!this.topNavBits.isVisible());
+    }
 }
