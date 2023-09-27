@@ -8,7 +8,7 @@ import javax.sound.sampled.*;
 public class Alarm {
 
     public static void playAlarm() throws UnsupportedAudioFileException, IOException, LineUnavailableException, InterruptedException {
-        String filename = "owl.wav";
+        String filename = "airplanebeep.wav";
         InputStream inputStream = new BufferedInputStream(Main.class.getResourceAsStream("/" + filename));
         AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(inputStream);
         Clip clip = AudioSystem.getClip();
