@@ -8,6 +8,9 @@ import java.io.IOException;
 import java.util.Scanner;
 
 public class Main {
+
+    static Scanner scanner = new Scanner(System.in);
+        
     public static void main(String[] args) throws InterruptedException, UnsupportedAudioFileException, LineUnavailableException, IOException {
         int workMinutes = getUserInput("work", 20);
         int breakMinutes = getUserInput("break", 5);
@@ -52,9 +55,7 @@ break;
             System.out.println("\nTimer finished!");
         }
     }
-
     private static int getUserInput(String type, int defaultValue) {
-        Scanner scanner = new Scanner(System.in);
         int input;
         do {
             System.out.print("Enter a number between 1 and 59 (" + type + " minutes, default " + defaultValue + "): ");
@@ -73,9 +74,9 @@ break;
                 }
             }
         } while (input < 1 || input > 59);
-        scanner.close();
         return input;
     }
+    
 
     private static String getProgressBar(int remainingSeconds, int totalSeconds) {
         int numFilled = (totalSeconds - remainingSeconds) * 7 / totalSeconds;
