@@ -73,6 +73,7 @@ break;
                 }
             }
         } while (input < 1 || input > 59);
+        scanner.close();
         return input;
     }
 
