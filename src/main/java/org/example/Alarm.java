@@ -1,30 +1,29 @@
 package org.example;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import javax.sound.sampled.*;
 
 public class Alarm {
 
-    public static void playAlarm() throws UnsupportedAudioFileException, IOException, LineUnavailableException, InterruptedException {
-        String filename = "airplanebeep.wav";
-        InputStream inputStream = new BufferedInputStream(Main.class.getResourceAsStream("/" + filename));
-        AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(inputStream);
-        Clip clip = AudioSystem.getClip();
-        clip.open(audioInputStream);
-        clip.start();
-        // Thread.sleep(clip.getMicrosecondLength() / 1000);
+    private static void playSound(String filename) throws IOException {
+        InputStream inputStream = Main.class.getResourceAsStream("/" + filename);
+        java.nio.file.Path tempFile = java.nio.file.Files.createTempFile(filename.replace(".wav", ""), ".wav");
+        java.nio.file.Files.copy(inputStream, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        inputStream.close();
+        
+        String os = System.getProperty("os.name").toLowerCase();
+        String audioPlayer = os.contains("mac") ? "afplay" : "aplay";
+        
+        ProcessBuilder pb = new ProcessBuilder(audioPlayer, tempFile.toString());
+        pb.start();
     }
 
-    public static void playBegin() throws UnsupportedAudioFileException, IOException, LineUnavailableException, InterruptedException {
-        String filename = "begin.wav";
-        InputStream inputStream = new BufferedInputStream(Main.class.getResourceAsStream("/" + filename));
-        AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(inputStream);
-        Clip clip = AudioSystem.getClip();
-        clip.open(audioInputStream);
-        clip.start();
-        // Thread.sleep(clip.getMicrosecondLength() / 1000);
+    public static void playAlarm() throws IOException {
+        playSound("airplanebeep.wav");
+    }
+
+    public static void playBegin() throws IOException {
+        playSound("begin.wav");
     }
 
 }
