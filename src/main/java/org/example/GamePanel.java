@@ -161,7 +161,7 @@ public class GamePanel extends JPanel {
                 scrollX = 0;
             }
 
-            groundScrollX -= 1.95;
+            groundScrollX -= 2.6;
             if (groundScrollX < -ground.getWidth()) {
                 groundScrollX = 0;
             }
