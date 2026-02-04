@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 
 public class GamePanel extends JPanel {
     private BufferedImage background, planeBlue1, planeBlue2, planeBlue3, rock, rockDown, ground, platform;
+    private BufferedImage planeRed1, planeRed2, planeRed3, planeGreen1, planeGreen2, planeGreen3, planeYellow1, planeYellow2, planeYellow3;
     private BufferedImage[] planeFrames;
     private BufferedImage[] numberImages = new BufferedImage[10];
     private BufferedImage[] letterImages = new BufferedImage[26];
@@ -32,6 +33,8 @@ public class GamePanel extends JPanel {
     private int cachedGroundY = 0;
     private int cachedLandingY = 0;
     private boolean renderBackground = true;
+    
+    private ArrayList<BackgroundPlane> backgroundPlanes = new ArrayList<>();
     private ArrayList<Obstacle> obstacles = new ArrayList<>();
     private boolean isWorking = true;
     private boolean isLanding = false;
@@ -116,6 +119,17 @@ public class GamePanel extends JPanel {
             planeBlue1 = scaleImage(p1, planeWidth, planeHeight);
             planeBlue2 = scaleImage(p2, planeWidth, planeHeight);
             planeBlue3 = scaleImage(p3, planeWidth, planeHeight);
+            
+            planeRed1 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeRed1.png")), planeWidth, planeHeight);
+            planeRed2 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeRed2.png")), planeWidth, planeHeight);
+            planeRed3 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeRed3.png")), planeWidth, planeHeight);
+            planeGreen1 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeGreen1.png")), planeWidth, planeHeight);
+            planeGreen2 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeGreen2.png")), planeWidth, planeHeight);
+            planeGreen3 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeGreen3.png")), planeWidth, planeHeight);
+            planeYellow1 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeYellow1.png")), planeWidth, planeHeight);
+            planeYellow2 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeYellow2.png")), planeWidth, planeHeight);
+            planeYellow3 = scaleImage(ImageIO.read(getClass().getResourceAsStream("/planeYellow3.png")), planeWidth, planeHeight);
+            
             BufferedImage r = ImageIO.read(getClass().getResourceAsStream("/rock" + currentTerrain + ".png"));
             BufferedImage rd = ImageIO.read(getClass().getResourceAsStream("/rock" + currentTerrain + "Down.png"));
             rock = scaleImage(r, PIPE_WIDTH, 40);
@@ -199,15 +213,35 @@ public class GamePanel extends JPanel {
             return;
         }
         
+        if (!isWorking) {
+            for (BackgroundPlane bp : backgroundPlanes) {
+                bp.x += bp.speed;
+            }
+            backgroundPlanes.removeIf(bp -> bp.x < -100 || bp.x > 420);
+            
+            if (backgroundPlanes.size() < 5 && Math.random() < 0.1) {
+                int y = 20 + (int)(Math.random() * 60);
+                double speed = 1.5 + Math.random() * 1.5;
+                boolean goingLeft = Math.random() < 0.5;
+                int x = goingLeft ? 370 : -50;
+                if (goingLeft) speed = -speed;
+                backgroundPlanes.add(new BackgroundPlane(x, y, speed));
+            }
+            
+            if (isLanding) {
+                frameCounter++;
+            }
+        }
+        
         if (isWorking && !isLanding) {
             scrollX -= 1.5;
-            if (scrollX < -background.getWidth()) {
-                scrollX = 0;
+            if (scrollX <= -background.getWidth()) {
+                scrollX += background.getWidth();
             }
 
             groundScrollX -= 2.6;
-            if (groundScrollX < -ground.getWidth()) {
-                groundScrollX = 0;
+            if (groundScrollX <= -ground.getWidth()) {
+                groundScrollX += ground.getWidth();
             }
 
             frameCounter++;
@@ -217,7 +251,7 @@ public class GamePanel extends JPanel {
                 
                 if (frameCounter % spawnInterval == 0) {
                     int gapY = 60 + (int)(Math.random() * 100);
-                    obstacles.add(new Obstacle(320, gapY));
+                    obstacles.add(new Obstacle(320 + PIPE_WIDTH, gapY));
                 }
             }
 
@@ -332,13 +366,17 @@ public class GamePanel extends JPanel {
         g2d.scale(scale, scale);
 
         if (renderBackground) {
-            g2d.drawImage(background, (int)scrollX, 0, null);
-            g2d.drawImage(background, (int)scrollX + background.getWidth(), 0, null);
-            g2d.drawImage(background, (int)scrollX + background.getWidth() * 2, 0, null);
+            int bgWidth = background.getWidth();
+            double bgX = scrollX % bgWidth;
+            g2d.drawImage(background, (int)bgX, 0, null);
+            g2d.drawImage(background, (int)(bgX - bgWidth), 0, null);
+            g2d.drawImage(background, (int)(bgX + bgWidth), 0, null);
 
-            g2d.drawImage(ground, (int)groundScrollX, cachedGroundY, null);
-            g2d.drawImage(ground, (int)groundScrollX + ground.getWidth(), cachedGroundY, null);
-            g2d.drawImage(ground, (int)groundScrollX + ground.getWidth() * 2, cachedGroundY, null);
+            int gWidth = ground.getWidth();
+            double gX = groundScrollX % gWidth;
+            g2d.drawImage(ground, (int)gX, cachedGroundY, null);
+            g2d.drawImage(ground, (int)(gX - gWidth), cachedGroundY, null);
+            g2d.drawImage(ground, (int)(gX + gWidth), cachedGroundY, null);
         }
 
         for (Obstacle obs : obstacles) {
@@ -364,6 +402,28 @@ public class GamePanel extends JPanel {
                 g2d.drawImage(platform, 80, cachedLandingY + planeHeight, null);
             }
             g2d.drawImage(planeFrames[0], 80, (int)planeY, null);
+        }
+        
+        if (!isWorking) {
+            for (BackgroundPlane bp : backgroundPlanes) {
+                BufferedImage[] frames;
+                switch(bp.color) {
+                    case 0: frames = new BufferedImage[]{planeBlue1, planeBlue2, planeBlue3}; break;
+                    case 1: frames = new BufferedImage[]{planeRed1, planeRed2, planeRed3}; break;
+                    case 2: frames = new BufferedImage[]{planeGreen1, planeGreen2, planeGreen3}; break;
+                    default: frames = new BufferedImage[]{planeYellow1, planeYellow2, planeYellow3}; break;
+                }
+                BufferedImage planeImg = frames[(frameCounter / 5) % 3];
+                if (bp.speed < 0) {
+                    BufferedImage flipped = new BufferedImage(planeImg.getWidth(), planeImg.getHeight(), BufferedImage.TYPE_INT_ARGB);
+                    Graphics2D gFlip = flipped.createGraphics();
+                    gFlip.drawImage(planeImg, planeImg.getWidth(), 0, -planeImg.getWidth(), planeImg.getHeight(), null);
+                    gFlip.dispose();
+                    g2d.drawImage(flipped, (int)bp.x, (int)bp.y, null);
+                } else {
+                    g2d.drawImage(planeImg, (int)bp.x, (int)bp.y, null);
+                }
+            }
         }
 
         drawText(g2d, timeText, 15, 25);
@@ -428,6 +488,16 @@ public class GamePanel extends JPanel {
         planeVelY = 0;
         scrollX = 0;
         groundScrollX = 0;
+        
+        backgroundPlanes.clear();
+        for (int i = 0; i < 5; i++) {
+            int y = 20 + (int)(Math.random() * 60);
+            double speed = 1.5 + Math.random() * 1.5;
+            boolean goingLeft = Math.random() < 0.5;
+            int x = goingLeft ? 320 + 50 + (int)(Math.random() * 200) : -50 - (int)(Math.random() * 200);
+            if (goingLeft) speed = -speed;
+            backgroundPlanes.add(new BackgroundPlane(x, y, speed));
+        }
     }
     
     private void drawText(Graphics2D g2d, String text, int x, int y) {
@@ -467,6 +537,17 @@ public class GamePanel extends JPanel {
         return width;
     }
 
+    static class BackgroundPlane {
+        double x, y, speed;
+        int color;
+        BackgroundPlane(double x, int y, double speed) {
+            this.x = x;
+            this.y = y;
+            this.speed = speed;
+            this.color = (int)(Math.random() * 4);
+        }
+    }
+
     static class Obstacle {
         int x, gapY;
         boolean scored = false;
@@ -481,6 +562,25 @@ public class GamePanel extends JPanel {
         for (int i = 0; i < frames; i++) {
             update();
         }
+    }
+    
+    public void updateForTest() {
+        update();
+    }
+    
+    public int getBackgroundPlaneCount() {
+        return backgroundPlanes.size();
+    }
+    
+    public BackgroundPlane getBackgroundPlane(int index) {
+        if (index < backgroundPlanes.size()) {
+            return backgroundPlanes.get(index);
+        }
+        return null;
+    }
+    
+    public boolean isLanding() {
+        return isLanding;
     }
 
     public double getPlaneY() {
