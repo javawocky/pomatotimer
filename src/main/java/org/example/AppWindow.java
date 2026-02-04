@@ -10,13 +10,13 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 
 public class AppWindow extends JFrame {
-    private JLabel textLabel;
+    private GamePanel gamePanel;
     private boolean skip;
     private JPanel topNavBits;
 
     public AppWindow() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setResizable(true);
+        setResizable(false);
         setLayout(new BorderLayout());
 
         // Button Panel
@@ -26,96 +26,62 @@ public class AppWindow extends JFrame {
 
         JButton skipButton = new JButton("Skip");
         skipButton.addActionListener(new ActionListener() {
-
             @Override
             public void actionPerformed(ActionEvent e) {
                 resetTimer();
             }
-
         });
 
         JButton exitButton = new JButton("Exit");
         exitButton.addActionListener(new ActionListener() {
-
             @Override
             public void actionPerformed(ActionEvent e) {
                 System.exit(0);
             }
-
         });
 
         topNavBits.add(skipButton);
         topNavBits.add(exitButton);
-
         add(topNavBits, BorderLayout.NORTH);
 
-        textLabel = new JLabel();
-        textLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        textLabel.setVerticalAlignment(SwingConstants.CENTER);
-
-        textLabel.addMouseListener(new MouseListener() {
-
+        gamePanel = new GamePanel();
+        gamePanel.addMouseListener(new MouseListener() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 toggleNavVisible();
             }
-
             @Override
-            public void mousePressed(MouseEvent e) {
-            }
-
+            public void mousePressed(MouseEvent e) {}
             @Override
-            public void mouseReleased(MouseEvent e) {
-            }
-
+            public void mouseReleased(MouseEvent e) {}
             @Override
-            public void mouseEntered(MouseEvent e) {
-            }
-
+            public void mouseEntered(MouseEvent e) {}
             @Override
-            public void mouseExited(MouseEvent e) {
-            }
-
+            public void mouseExited(MouseEvent e) {}
         });
-        add(textLabel, BorderLayout.CENTER);
+        add(gamePanel, BorderLayout.CENTER);
 
-        addComponentListener(new ComponentAdapter() {
-            @Override
-            public void componentResized(ComponentEvent e) {
-                resizeText();
-            }
-        });
-
-        setSize(300, 200);
+        setSize(320, 240);
+        setLocationRelativeTo(null);
         setVisible(true);
     }
 
-    public void setText(String text) {
-        textLabel.setText(text);
-        resizeText();
+    public void setTimeText(String text) {
+        gamePanel.setTimeText(text);
     }
 
-    public void setColor(Color foreground, Color background) {
-        textLabel.setForeground(foreground);
-        textLabel.setBackground(background);
-        textLabel.setOpaque(true);
-
-        topNavBits.setBackground(background);
+    public void startWork() {
+        gamePanel.startWork();
     }
 
-    private void resizeText() {
-        int width = getContentPane().getWidth();
-        int height = getContentPane().getHeight();
-        Font currentFont = textLabel.getFont();
-        Font resizedFont = currentFont.deriveFont(Font.PLAIN, Math.min(width, height) / 2.5f);
-        textLabel.setFont(resizedFont);
+    public void startBreak() {
+        gamePanel.startBreak();
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             AppWindow frame = new AppWindow();
-            frame.setColor(Color.WHITE, Color.BLACK);
-            frame.setText("AB");
+            frame.setTimeText("00:00");
         });
     }
 

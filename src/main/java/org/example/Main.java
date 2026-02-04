@@ -2,7 +2,7 @@ package org.example;
 
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
-
+import javax.swing.*;
 import java.awt.Color;
 import java.io.IOException;
 import java.util.Scanner;
@@ -10,46 +10,61 @@ import java.util.Scanner;
 public class Main {
 
     static Scanner scanner = new Scanner(System.in);
+    
+    private static int showStartupDialog(String type, int defaultValue) {
+        String input = JOptionPane.showInputDialog(
+            null,
+            type + " minutes (1-59 or decimal like 0.2):",
+            "Pomodoro Timer Setup",
+            JOptionPane.QUESTION_MESSAGE
+        );
+        
+        if (input == null || input.trim().isEmpty()) {
+            return defaultValue;
+        }
+        
+        try {
+            double value = Double.parseDouble(input.trim());
+            if (value > 0 && value <= 59) {
+                return (int)(value * 60);
+            }
+        } catch (NumberFormatException e) {
+        }
+        
+        return defaultValue;
+    }
         
     public static void main(String[] args) throws InterruptedException, UnsupportedAudioFileException, LineUnavailableException, IOException {
-        int workMinutes = getUserInput("work", 20);
-        int breakMinutes = getUserInput("break", 5);
+        int workMinutes = showStartupDialog("Work", 20);
+        int breakMinutes = showStartupDialog("Break", 5);
 
         var jw = new AppWindow();
-        jw.setText("BZ");
 
         while(true) {
             System.out.println("\nStarting timer...");
-
             Alarm.playBegin();
+            jw.startWork();
 
-            int totalSeconds = workMinutes * 60;
-
-            jw.setColor(new Color(255, 111, 0) , Color.DARK_GRAY);
+            int totalSeconds = workMinutes;
             for (int i = totalSeconds; i > 0; i--) {
                 String progress = getProgressBar(i, totalSeconds);
                 System.out.print("\r" + progress + " " + getTimeRemaining(i));
-                jw.setText(getTimeRemaining(i));
+                jw.setTimeText(getTimeRemaining(i));
                 Thread.sleep(1000);
-                
-                if(jw.isSkip()) {
-break;
-                }
+                if(jw.isSkip()) break;
             }
 
             System.out.println("\nTime for a break!");
-            jw.setColor(Color.LIGHT_GRAY, Color.PINK);
-
             Alarm.playAlarm();
-            totalSeconds = breakMinutes * 60;
+            jw.startBreak();
+            
+            totalSeconds = breakMinutes;
             for (int i = totalSeconds; i > 0; i--) {
                 String progress = getProgressBar(i, totalSeconds);
                 System.out.print("\r" + progress + " " + getTimeRemaining(i));
-                jw.setText(getTimeRemaining(i));
+                jw.setTimeText(getTimeRemaining(i));
                 Thread.sleep(1000);
-                if(jw.isSkip()) {
-                    break;
-                }
+                if(jw.isSkip()) break;
             }
 
             System.out.println("\nTimer finished!");
