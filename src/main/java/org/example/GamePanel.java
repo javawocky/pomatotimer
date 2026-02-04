@@ -18,6 +18,7 @@ public class GamePanel extends JPanel {
     private BufferedImage planeRed1, planeRed2, planeRed3, planeGreen1, planeGreen2, planeGreen3, planeYellow1, planeYellow2, planeYellow3;
     private BufferedImage[] planeFrames;
     private BufferedImage[] numberImages = new BufferedImage[10];
+    private BufferedImage numberColon;
     private BufferedImage[] letterImages = new BufferedImage[26];
     private int scrollX = 0;
     private int groundScrollX = 0;
@@ -56,6 +57,8 @@ public class GamePanel extends JPanel {
         setBackground(Color.BLACK);
         
         System.setProperty("sun.java2d.opengl", "true");
+        
+        loadHighScore();
         
         String[] colors = {"Blue", "Green", "Red", "Yellow"};
         String[] terrains = {"Grass", "Ice", "Snow"};
@@ -145,6 +148,10 @@ public class GamePanel extends JPanel {
                 int scaledWidth = (int)(num.getWidth() * 18.0 / num.getHeight());
                 numberImages[i] = scaleImage(num, scaledWidth, 18);
             }
+            
+            BufferedImage colon = ImageIO.read(getClass().getResourceAsStream("/numbercolon.png"));
+            int colonWidth = (int)(colon.getWidth() * 18.0 / colon.getHeight());
+            numberColon = scaleImage(colon, colonWidth, 18);
             
             for (int i = 0; i < 26; i++) {
                 char letter = (char)('A' + i);
@@ -304,6 +311,10 @@ public class GamePanel extends JPanel {
                 if (!obs.scored && obs.x + PIPE_WIDTH < 80) {
                     obs.scored = true;
                     score += 10;
+                    if (score > highScore) {
+                        highScore = score;
+                        saveHighScore();
+                    }
                 }
             }
             obstacles.removeIf(obs -> obs.x < -PIPE_WIDTH - 50);
@@ -563,6 +574,9 @@ public class GamePanel extends JPanel {
                 BufferedImage img = numberImages[c - '0'];
                 g2d.drawImage(img, currentX, y - 18, null);
                 currentX += img.getWidth();
+            } else if (c == ':') {
+                g2d.drawImage(numberColon, currentX, y - 18, null);
+                currentX += numberColon.getWidth();
             } else if (c >= 'A' && c <= 'Z') {
                 BufferedImage img = letterImages[c - 'A'];
                 g2d.drawImage(img, currentX, y - 18, null);
@@ -571,7 +585,7 @@ public class GamePanel extends JPanel {
                 BufferedImage img = letterImages[c - 'a'];
                 g2d.drawImage(img, currentX, y - 18, null);
                 currentX += img.getWidth();
-            } else if (c == ' ' || c == ':') {
+            } else if (c == ' ') {
                 currentX += 8;
             }
         }
@@ -582,11 +596,13 @@ public class GamePanel extends JPanel {
         for (char c : text.toCharArray()) {
             if (c >= '0' && c <= '9') {
                 width += numberImages[c - '0'].getWidth();
+            } else if (c == ':') {
+                width += numberColon.getWidth();
             } else if (c >= 'A' && c <= 'Z') {
                 width += letterImages[c - 'A'].getWidth();
             } else if (c >= 'a' && c <= 'z') {
                 width += letterImages[c - 'a'].getWidth();
-            } else if (c == ' ' || c == ':') {
+            } else if (c == ' ') {
                 width += 8;
             }
         }
@@ -659,5 +675,31 @@ public class GamePanel extends JPanel {
 
     public void setObstacle(int x, int gapY) {
         obstacles.add(new Obstacle(x, gapY));
+    }
+    
+    private void loadHighScore() {
+        try {
+            java.io.File file = new java.io.File(System.getProperty("user.home"), ".pomatotimer_highscore");
+            if (file.exists()) {
+                java.util.Scanner scanner = new java.util.Scanner(file);
+                if (scanner.hasNextInt()) {
+                    highScore = scanner.nextInt();
+                }
+                scanner.close();
+            }
+        } catch (Exception e) {
+            highScore = 0;
+        }
+    }
+    
+    private void saveHighScore() {
+        try {
+            java.io.File file = new java.io.File(System.getProperty("user.home"), ".pomatotimer_highscore");
+            java.io.PrintWriter writer = new java.io.PrintWriter(file);
+            writer.println(highScore);
+            writer.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
