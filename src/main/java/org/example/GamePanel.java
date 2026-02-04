@@ -16,6 +16,8 @@ import java.util.concurrent.TimeUnit;
 public class GamePanel extends JPanel {
     private BufferedImage background, planeBlue1, planeBlue2, planeBlue3, rock, rockDown, ground, platform;
     private BufferedImage[] planeFrames;
+    private BufferedImage[] numberImages = new BufferedImage[10];
+    private BufferedImage[] letterImages = new BufferedImage[26];
     private int scrollX = 0;
     private int groundScrollX = 0;
     private double planeY = 100;
@@ -122,6 +124,19 @@ public class GamePanel extends JPanel {
             ground = scaleImage(g, g.getWidth() / 2, g.getHeight() / 2);
             BufferedImage p = ImageIO.read(getClass().getResourceAsStream("/buttonLarge.png"));
             platform = scaleImage(p, 80, 30);
+            
+            for (int i = 0; i < 10; i++) {
+                BufferedImage num = ImageIO.read(getClass().getResourceAsStream("/number" + i + ".png"));
+                int scaledWidth = (int)(num.getWidth() * 18.0 / num.getHeight());
+                numberImages[i] = scaleImage(num, scaledWidth, 18);
+            }
+            
+            for (int i = 0; i < 26; i++) {
+                char letter = (char)('A' + i);
+                BufferedImage let = ImageIO.read(getClass().getResourceAsStream("/letter" + letter + ".png"));
+                int scaledWidth = (int)(let.getWidth() * 18.0 / let.getHeight());
+                letterImages[i] = scaleImage(let, scaledWidth, 18);
+            }
             
             cachedGroundY = 240 - ground.getHeight();
             cachedLandingY = 240 - ground.getHeight() - planeHeight - 30;
@@ -322,14 +337,15 @@ public class GamePanel extends JPanel {
             g2d.drawImage(planeFrames[0], 80, (int)planeY, null);
         }
 
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font("Arial", Font.BOLD, 20));
-        g2d.drawString(timeText, 10, 25);
-        g2d.drawString(String.format("%05d", score), 240, 25);
+        drawText(g2d, timeText, 15, 25);
+        
+        String scoreText = String.format("%05d", score);
+        int scoreWidth = getTextWidth(scoreText);
+        drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
         
         String highScoreText = "HI " + String.format("%05d", highScore);
-        int hsWidth = g2d.getFontMetrics().stringWidth(highScoreText);
-        g2d.drawString(highScoreText, (320 - hsWidth) / 2, 25);
+        int hsWidth = getTextWidth(highScoreText);
+        drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
 
         if (isGameOver) {
             g2d.setColor(new Color(0, 0, 0, 180));
@@ -383,6 +399,43 @@ public class GamePanel extends JPanel {
         planeVelY = 0;
         scrollX = 0;
         groundScrollX = 0;
+    }
+    
+    private void drawText(Graphics2D g2d, String text, int x, int y) {
+        int currentX = x;
+        for (char c : text.toCharArray()) {
+            if (c >= '0' && c <= '9') {
+                BufferedImage img = numberImages[c - '0'];
+                g2d.drawImage(img, currentX, y - 18, null);
+                currentX += img.getWidth();
+            } else if (c >= 'A' && c <= 'Z') {
+                BufferedImage img = letterImages[c - 'A'];
+                g2d.drawImage(img, currentX, y - 18, null);
+                currentX += img.getWidth();
+            } else if (c >= 'a' && c <= 'z') {
+                BufferedImage img = letterImages[c - 'a'];
+                g2d.drawImage(img, currentX, y - 18, null);
+                currentX += img.getWidth();
+            } else if (c == ' ' || c == ':') {
+                currentX += 8;
+            }
+        }
+    }
+    
+    private int getTextWidth(String text) {
+        int width = 0;
+        for (char c : text.toCharArray()) {
+            if (c >= '0' && c <= '9') {
+                width += numberImages[c - '0'].getWidth();
+            } else if (c >= 'A' && c <= 'Z') {
+                width += letterImages[c - 'A'].getWidth();
+            } else if (c >= 'a' && c <= 'z') {
+                width += letterImages[c - 'a'].getWidth();
+            } else if (c == ' ' || c == ':') {
+                width += 8;
+            }
+        }
+        return width;
     }
 
     static class Obstacle {
