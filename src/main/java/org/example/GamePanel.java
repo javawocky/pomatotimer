@@ -121,7 +121,8 @@ public class GamePanel extends JPanel {
             rock = scaleImage(r, PIPE_WIDTH, 40);
             rockDown = scaleImage(rd, PIPE_WIDTH, 40);
             BufferedImage g = ImageIO.read(getClass().getResourceAsStream("/ground" + currentTerrain + ".png"));
-            ground = scaleImage(g, g.getWidth() / 2, g.getHeight() / 2);
+            BufferedImage gDesaturated = desaturateImage(g, 0.5f);
+            ground = scaleImage(gDesaturated, gDesaturated.getWidth() / 2, gDesaturated.getHeight() / 2);
             BufferedImage p = ImageIO.read(getClass().getResourceAsStream("/buttonLarge.png"));
             platform = scaleImage(p, 80, 30);
             
@@ -153,6 +154,34 @@ public class GamePanel extends JPanel {
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         g2d.drawImage(img, 0, 0, w, h, null);
         g2d.dispose();
+        return result;
+    }
+    
+    private BufferedImage desaturateImage(BufferedImage img, float saturation) {
+        BufferedImage result = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int rgb = img.getRGB(x, y);
+                int a = (rgb >> 24) & 0xff;
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                
+                float[] hsb = Color.RGBtoHSB(r, g, b, null);
+                hsb[1] *= saturation;
+                
+                int newRgb = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
+                int newR = (newRgb >> 16) & 0xff;
+                int newG = (newRgb >> 8) & 0xff;
+                int newB = newRgb & 0xff;
+                
+                newR = (int)(newR + (200 - newR) * 0.4);
+                newG = (int)(newG + (200 - newG) * 0.4);
+                newB = (int)(newB + (200 - newB) * 0.4);
+                
+                result.setRGB(x, y, (a << 24) | (newR << 16) | (newG << 8) | newB);
+            }
+        }
         return result;
     }
 
@@ -210,7 +239,7 @@ public class GamePanel extends JPanel {
                     score += 10;
                 }
             }
-            obstacles.removeIf(obs -> obs.x < -PIPE_WIDTH);
+            obstacles.removeIf(obs -> obs.x < -PIPE_WIDTH - 50);
 
             int planeX = 80;
             Obstacle nextObs = null;
