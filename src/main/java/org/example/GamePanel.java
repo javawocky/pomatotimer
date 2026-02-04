@@ -5,9 +5,13 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseMotionAdapter;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class GamePanel extends JPanel {
     private BufferedImage background, planeBlue1, planeBlue2, planeBlue3, rock, rockDown, ground, platform;
@@ -23,6 +27,9 @@ public class GamePanel extends JPanel {
     private boolean platformSpawned = false;
     private String currentPlaneColor = "Blue";
     private String currentTerrain = "";
+    private int cachedGroundY = 0;
+    private int cachedLandingY = 0;
+    private boolean renderBackground = true;
     private ArrayList<Obstacle> obstacles = new ArrayList<>();
     private boolean isWorking = true;
     private boolean isLanding = false;
@@ -43,6 +50,8 @@ public class GamePanel extends JPanel {
         setPreferredSize(new Dimension(320, 240));
         setBackground(Color.BLACK);
         
+        System.setProperty("sun.java2d.opengl", "true");
+        
         String[] colors = {"Blue", "Green", "Red", "Yellow"};
         String[] terrains = {"Grass", "Ice", "Snow"};
         currentPlaneColor = colors[(int)(Math.random() * colors.length)];
@@ -57,15 +66,26 @@ public class GamePanel extends JPanel {
             public void keyPressed(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_F) {
                     toggleFullscreen();
+                } else if (e.getKeyCode() == KeyEvent.VK_B) {
+                    renderBackground = !renderBackground;
                 }
             }
         });
         
-        Timer timer = new Timer(30, e -> {
-            update();
-            repaint();
-        });
-        timer.start();
+        new Thread(() -> {
+            while (true) {
+                SwingUtilities.invokeLater(() -> {
+                    update();
+                    repaint();
+                    Toolkit.getDefaultToolkit().sync();
+                });
+                try {
+                    Thread.sleep(33);
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+        }).start();
     }
     
     private void toggleFullscreen() {
@@ -102,16 +122,21 @@ public class GamePanel extends JPanel {
             ground = scaleImage(g, g.getWidth() / 2, g.getHeight() / 2);
             BufferedImage p = ImageIO.read(getClass().getResourceAsStream("/buttonLarge.png"));
             platform = scaleImage(p, 80, 30);
+            
+            cachedGroundY = 240 - ground.getHeight();
+            cachedLandingY = 240 - ground.getHeight() - planeHeight - 30;
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     private BufferedImage scaleImage(BufferedImage img, int w, int h) {
-        Image scaled = img.getScaledInstance(w, h, Image.SCALE_SMOOTH);
         BufferedImage result = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = result.createGraphics();
-        g2d.drawImage(scaled, 0, 0, null);
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+        g2d.drawImage(img, 0, 0, w, h, null);
         g2d.dispose();
         return result;
     }
@@ -153,8 +178,7 @@ public class GamePanel extends JPanel {
             }
 
             if (platformSpawned) {
-                int landingY = 240 - ground.getHeight() - (ground.getHeight() / 2) - planeHeight - 30;
-                if (planeY < landingY) {
+                if (planeY < cachedLandingY) {
                     platformX -= 3;
                     if (platformX < 80) {
                         platformX = 80;
@@ -182,7 +206,7 @@ public class GamePanel extends JPanel {
             }
 
             if (platformSpawned && platformX < 100) {
-                targetY = 240 - ground.getHeight() - (ground.getHeight() / 2) - planeHeight - 30;
+                targetY = cachedLandingY;
             } else if (nextObs != null) {
                 targetY = nextObs.gapY;
             } else {
@@ -228,10 +252,9 @@ public class GamePanel extends JPanel {
             }
         } else if (isLanding) {
             landingProgress++;
-            int landingY = 240 - ground.getHeight() - (ground.getHeight() / 2) - planeHeight - 30;
-            if (planeY < landingY) {
+            if (planeY < cachedLandingY) {
                 planeY += 2;
-                if (planeY > landingY) planeY = landingY;
+                if (planeY > cachedLandingY) planeY = cachedLandingY;
             }
             if (landingProgress > 60) {
                 isLanding = false;
@@ -243,6 +266,9 @@ public class GamePanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g;
+        
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         
         int panelWidth = getWidth();
         int panelHeight = getHeight();
@@ -261,14 +287,15 @@ public class GamePanel extends JPanel {
         g2d.translate(offsetX, offsetY);
         g2d.scale(scale, scale);
 
-        g2d.drawImage(background, (int)scrollX, 0, null);
-        g2d.drawImage(background, (int)scrollX + background.getWidth(), 0, null);
-        g2d.drawImage(background, (int)scrollX + background.getWidth() * 2, 0, null);
+        if (renderBackground) {
+            g2d.drawImage(background, (int)scrollX, 0, null);
+            g2d.drawImage(background, (int)scrollX + background.getWidth(), 0, null);
+            g2d.drawImage(background, (int)scrollX + background.getWidth() * 2, 0, null);
 
-        int groundY = 240 - ground.getHeight();
-        g2d.drawImage(ground, (int)groundScrollX, groundY, null);
-        g2d.drawImage(ground, (int)groundScrollX + ground.getWidth(), groundY, null);
-        g2d.drawImage(ground, (int)groundScrollX + ground.getWidth() * 2, groundY, null);
+            g2d.drawImage(ground, (int)groundScrollX, cachedGroundY, null);
+            g2d.drawImage(ground, (int)groundScrollX + ground.getWidth(), cachedGroundY, null);
+            g2d.drawImage(ground, (int)groundScrollX + ground.getWidth() * 2, cachedGroundY, null);
+        }
 
         for (Obstacle obs : obstacles) {
             int topPipeHeight = obs.gapY - PIPE_GAP/2;
@@ -283,16 +310,14 @@ public class GamePanel extends JPanel {
         }
 
         if (platformSpawned && platformX > -100) {
-            int platformY = 240 - ground.getHeight() - (ground.getHeight() / 2) - 30;
-            g2d.drawImage(platform, platformX, platformY, null);
+            g2d.drawImage(platform, platformX, cachedLandingY + planeHeight, null);
         }
 
         if (!isLanding) {
             g2d.drawImage(planeFrames[(frameCounter / 5) % 3], 80, (int)planeY, null);
         } else {
-            int landingY = 240 - ground.getHeight() - (ground.getHeight() / 2) - planeHeight - 30;
             if (platformX > -100) {
-                g2d.drawImage(platform, 80, landingY + planeHeight, null);
+                g2d.drawImage(platform, 80, cachedLandingY + planeHeight, null);
             }
             g2d.drawImage(planeFrames[0], 80, (int)planeY, null);
         }
