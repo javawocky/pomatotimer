@@ -216,16 +216,49 @@ public class GamePanel extends JPanel {
         if (!isWorking) {
             for (BackgroundPlane bp : backgroundPlanes) {
                 bp.x += bp.speed;
+                
+                // Collision avoidance AI
+                BackgroundPlane closest = null;
+                double closestDist = Double.MAX_VALUE;
+                for (BackgroundPlane other : backgroundPlanes) {
+                    if (other == bp) continue;
+                    double dist = Math.abs(other.x - bp.x);
+                    if (dist < closestDist && dist < 100) {
+                        closestDist = dist;
+                        closest = other;
+                    }
+                }
+                
+                if (closest != null) {
+                    double yDiff = Math.abs(closest.y - bp.y);
+                    if (yDiff < planeHeight) {
+                        // Too close vertically, adjust target
+                        if (bp.y < closest.y) {
+                            bp.targetY = Math.max(15, bp.y - 5);
+                        } else {
+                            bp.targetY = Math.min(115, bp.y + 5);
+                        }
+                    } else {
+                        bp.targetY = bp.y;
+                    }
+                } else {
+                    bp.targetY = bp.y;
+                }
+                
+                // Lerp towards target
+                bp.y += (bp.targetY - bp.y) * 0.1;
             }
             backgroundPlanes.removeIf(bp -> bp.x < -100 || bp.x > 420);
             
             if (backgroundPlanes.size() < 5 && Math.random() < 0.1) {
-                int y = 20 + (int)(Math.random() * 60);
-                double speed = 1.5 + Math.random() * 1.5;
-                boolean goingLeft = Math.random() < 0.5;
-                int x = goingLeft ? 370 : -50;
-                if (goingLeft) speed = -speed;
-                backgroundPlanes.add(new BackgroundPlane(x, y, speed));
+                int y = getAvailableHeight();
+                if (y != -1) {
+                    double speed = 1.5 + Math.random() * 1.5;
+                    boolean goingLeft = Math.random() < 0.5;
+                    int x = goingLeft ? 370 : -80;
+                    if (goingLeft) speed = -speed;
+                    backgroundPlanes.add(new BackgroundPlane(x, y, speed));
+                }
             }
             
             if (isLanding) {
@@ -490,14 +523,37 @@ public class GamePanel extends JPanel {
         groundScrollX = 0;
         
         backgroundPlanes.clear();
-        for (int i = 0; i < 5; i++) {
-            int y = 20 + (int)(Math.random() * 60);
+        int targetPlanes = 5;
+        int maxAttempts = 50;
+        for (int i = 0; i < targetPlanes && maxAttempts > 0; i++) {
+            int y = getAvailableHeight();
+            if (y == -1) {
+                maxAttempts--;
+                i--;
+                continue;
+            }
             double speed = 1.5 + Math.random() * 1.5;
             boolean goingLeft = Math.random() < 0.5;
             int x = goingLeft ? 320 + 50 + (int)(Math.random() * 200) : -50 - (int)(Math.random() * 200);
             if (goingLeft) speed = -speed;
             backgroundPlanes.add(new BackgroundPlane(x, y, speed));
         }
+    }
+    
+    private int getAvailableHeight() {
+        int minSeparation = planeHeight + 10;
+        for (int attempt = 0; attempt < 50; attempt++) {
+            int y = 15 + (int)(Math.random() * 100);
+            boolean tooClose = false;
+            for (BackgroundPlane bp : backgroundPlanes) {
+                if (Math.abs(bp.y - y) < minSeparation) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            if (!tooClose) return y;
+        }
+        return -1;
     }
     
     private void drawText(Graphics2D g2d, String text, int x, int y) {
@@ -540,9 +596,11 @@ public class GamePanel extends JPanel {
     static class BackgroundPlane {
         double x, y, speed;
         int color;
+        double targetY;
         BackgroundPlane(double x, int y, double speed) {
             this.x = x;
             this.y = y;
+            this.targetY = y;
             this.speed = speed;
             this.color = (int)(Math.random() * 4);
         }
