@@ -48,6 +48,22 @@ public class GamePanel extends JPanel {
     private int planeWidth = 24;
     private int planeHeight = 24;
     private static final int PIPE_WIDTH = 50;
+    
+    private static final String[] FIRST_NAMES = {
+        "ACE", "SKY", "JET", "MAVERICK", "STORM", "THUNDER", "LIGHTNING", "ROCKET",
+        "TURBO", "SONIC", "BLAZE", "FLASH", "VIPER", "EAGLE", "HAWK", "FALCON",
+        "PHOENIX", "GHOST", "SHADOW", "STEALTH"
+    };
+    
+    private static final String[] LAST_NAMES = {
+        "BOMBER", "DIVER", "EAGLE", "FALCON", "HUNTER", "RIDER", "FLYER", "SOARER",
+        "GLIDER", "CRUISER", "RACER", "STRIKER", "FIGHTER", "PILOT", "AVIATOR", "WINGS",
+        "SKYWALKER", "CLOUDCHASER", "WINDRUNNER", "STORMBREAKER"
+    };
+    
+    private String playerName;
+    private java.util.List<HighScoreEntry> highScoreTable = new java.util.ArrayList<>();
+    private int highScoreScrollX = 0;
     private static final int PIPE_GAP = 80;
     private static final double GRAVITY = 0.5;
     private static final double JUMP_STRENGTH = -4;
@@ -59,6 +75,8 @@ public class GamePanel extends JPanel {
         System.setProperty("sun.java2d.opengl", "true");
         
         loadHighScore();
+        initializeHighScoreTable();
+        playerName = generateRandomName();
         
         String[] colors = {"Blue", "Green", "Red", "Yellow"};
         String[] terrains = {"Grass", "Ice", "Snow"};
@@ -213,8 +231,13 @@ public class GamePanel extends JPanel {
                 if (score > highScore) {
                     highScore = score;
                 }
+                // Check if score qualifies for high score table
+                if (highScoreTable.size() < 5 || score > highScoreTable.get(4).score) {
+                    addHighScore(playerName, score);
+                }
                 isGameOver = false;
                 gameOverTimer = 0;
+                playerName = generateRandomName();
                 startWork();
             }
             return;
@@ -267,6 +290,9 @@ public class GamePanel extends JPanel {
                     backgroundPlanes.add(new BackgroundPlane(x, y, speed));
                 }
             }
+            
+            // Scroll high score table
+            highScoreScrollX -= 1;
             
             if (isLanding) {
                 frameCounter++;
@@ -479,6 +505,18 @@ public class GamePanel extends JPanel {
         String highScoreText = "HI " + String.format("%05d", highScore);
         int hsWidth = getTextWidth(highScoreText);
         drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
+        
+        // Draw scrolling high score table during break
+        if (!isWorking) {
+            String highScoreString = buildHighScoreString();
+            int textWidth = getTextWidth(highScoreString);
+            drawText(g2d, highScoreString, highScoreScrollX, cachedGroundY + 5);
+            
+            // Reset scroll when text goes off screen
+            if (highScoreScrollX + textWidth < 0) {
+                highScoreScrollX = 320;
+            }
+        }
 
         if (isGameOver) {
             g2d.setColor(new Color(0, 0, 0, 180));
@@ -532,6 +570,7 @@ public class GamePanel extends JPanel {
         planeVelY = 0;
         scrollX = 0;
         groundScrollX = 0;
+        highScoreScrollX = 320;
         
         backgroundPlanes.clear();
         int targetPlanes = 5;
@@ -609,6 +648,15 @@ public class GamePanel extends JPanel {
         return width;
     }
 
+    static class HighScoreEntry {
+        String name;
+        int score;
+        HighScoreEntry(String name, int score) {
+            this.name = name;
+            this.score = score;
+        }
+    }
+
     static class BackgroundPlane {
         double x, y, speed;
         int color;
@@ -677,6 +725,18 @@ public class GamePanel extends JPanel {
         obstacles.add(new Obstacle(x, gapY));
     }
     
+    public int getHighScoreTableSize() {
+        return highScoreTable.size();
+    }
+    
+    public HighScoreEntry getHighScoreEntry(int index) {
+        return highScoreTable.get(index);
+    }
+    
+    public void addHighScorePublic(String name, int score) {
+        addHighScore(name, score);
+    }
+    
     private void loadHighScore() {
         try {
             java.io.File file = new java.io.File(System.getProperty("user.home"), ".pomatotimer_highscore");
@@ -690,6 +750,40 @@ public class GamePanel extends JPanel {
         } catch (Exception e) {
             highScore = 0;
         }
+    }
+    
+    private String generateRandomName() {
+        String first = FIRST_NAMES[(int)(Math.random() * FIRST_NAMES.length)];
+        String last = LAST_NAMES[(int)(Math.random() * LAST_NAMES.length)];
+        return first + " " + last;
+    }
+    
+    private void initializeHighScoreTable() {
+        highScoreTable.clear();
+        int[] scores = {200, 150, 100, 75, 50};
+        for (int score : scores) {
+            highScoreTable.add(new HighScoreEntry(generateRandomName(), score));
+        }
+    }
+    
+    private void addHighScore(String name, int score) {
+        highScoreTable.add(new HighScoreEntry(name, score));
+        highScoreTable.sort((a, b) -> b.score - a.score);
+        if (highScoreTable.size() > 5) {
+            highScoreTable.remove(5);
+        }
+    }
+    
+    private String buildHighScoreString() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < highScoreTable.size(); i++) {
+            HighScoreEntry entry = highScoreTable.get(i);
+            sb.append((i + 1)).append(": ").append(entry.name).append(" ").append(entry.score);
+            if (i < highScoreTable.size() - 1) {
+                sb.append("   ");
+            }
+        }
+        return sb.toString();
     }
     
     private void saveHighScore() {

@@ -146,3 +146,30 @@ Created `GamePanelTest` class that:
 - All 10 tests pass successfully
 - GamePanel logic verified and working correctly
 - Landing animation fixed to ensure plane reaches y=200
+
+
+## High Score Table Feature
+
+### Requirements:
+1. **Name Generation**
+   - Create array of ~20 first names (flying-themed: Ace, Sky, Jet, Maverick, etc.)
+   - Create array of ~20 last names (flying-themed: Bomber, Diver, Eagle, Falcon, etc.)
+   - Assign random name to player when game starts (not displayed yet)
+
+2. **High Score Table**
+   - Store in memory as array/list of 5 entries
+   - Each entry: name + score
+   - On app start: populate with 5 random names and scores (200, 150, 100, 75, 50 - multiples of 10)
+   - When player achieves high score: insert at appropriate position, remove lowest score
+   - Keep only top 5 scores
+
+3. **Display During Break Phase**
+   - Scroll high score table along bottom of screen at ground image height
+   - Use existing letter/number images (same as timer/score display)
+   - Format: "1: ACE BOMBER 200  2: SKY EAGLE 150..." (using colon since no period available)
+   - Hide when work phase begins
+   - Show throughout entire break period
+
+4. **Persistence**
+   - Consider saving high score table to file (like current high score)
+   - Load on startup if exists
