@@ -75,7 +75,7 @@ public class GamePanel extends JPanel {
     private int newHighScoreValue = 0;
     private static final int PIPE_GAP = 80;
     private static final double GRAVITY = 0.5;
-    private static final double JUMP_STRENGTH = -4;
+    private static final double JUMP_STRENGTH = -4.5;
 
     public GamePanel() {
         setPreferredSize(new Dimension(320, 240));
@@ -256,7 +256,7 @@ public class GamePanel extends JPanel {
         // Update intro timer
         if (showIntro) {
             introTimer++;
-            if (introTimer >= 300) { // 5 seconds at 60fps
+            if (introTimer >= 180) { // 3 seconds at 60fps
                 showIntro = false;
             }
         }
@@ -419,7 +419,8 @@ public class GamePanel extends JPanel {
                 jumpTimer++;
                 if (jumpTimer > 12) {
                     double predictedY = planeY + planeVelY * 8;
-                    if (predictedY > targetY + 15 || planeY > targetY + 10) {
+                    // Only jump if target is above us or we're falling too far below target
+                    if ((predictedY > targetY + 15 || planeY > targetY + 10) && targetY < planeY) {
                         planeVelY = JUMP_STRENGTH;
                         jumpTimer = 0;
                     }
@@ -669,13 +670,13 @@ public class GamePanel extends JPanel {
         if (showNewHighScore) {
             String message = "NEW HIGH SCORE";
             int messageWidth = getTextWidth(message);
-            drawText(g2d, message, (320 - messageWidth) / 2, 110);
+            drawText(g2d, message, (320 - messageWidth) / 2, 140);
             
             // Flash score 6 times per second (60fps / 10 = 6Hz)
             if ((newHighScoreTimer / 10) % 2 == 0) {
                 String newScoreText = String.format("%05d", newHighScoreValue);
                 int newScoreWidth = getTextWidth(newScoreText);
-                drawText(g2d, newScoreText, (320 - newScoreWidth) / 2, 130);
+                drawText(g2d, newScoreText, (320 - newScoreWidth) / 2, 160);
             }
         }
 
@@ -709,6 +710,8 @@ public class GamePanel extends JPanel {
         
         isWorking = true;
         isLanding = false;
+        isGameOver = false;  // Clear game over state
+        showNewHighScore = false;  // Clear high score message
         isManualControl = false;  // Reset to AI control
         landingSequenceActive = false;  // Reset landing sequence
         scrollX = 0;
