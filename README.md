@@ -1,4 +1,4 @@
-# Pomato Timer
+# Pomodoro Pilot
 
 A Pomodoro timer with an integrated Flappy Bird-style game to keep you focused during work sessions.
 
