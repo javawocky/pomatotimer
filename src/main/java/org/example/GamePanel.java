@@ -42,6 +42,7 @@ public class GamePanel extends JPanel {
     private boolean isGameOver = false;
     private boolean isManualControl = false;
     private boolean spacePressed = false;
+    private boolean landingSequenceActive = false;
     private int gameOverTimer = 0;
     private int landingProgress = 0;
     private String timeText = "00:00";
@@ -107,10 +108,10 @@ public class GamePanel extends JPanel {
                 } else if (e.getKeyCode() == KeyEvent.VK_B) {
                     renderBackground = !renderBackground;
                 } else if (e.getKeyCode() == KeyEvent.VK_SPACE) {
-                    if (isWorking && !isGameOver && !spacePressed) {
+                    if (isWorking && !isGameOver && !spacePressed && !landingSequenceActive) {
                         isManualControl = true;
-                        // Jump with shorter influence
-                        planeVelY = -6;
+                        // Jump - halfway between -3 and -6
+                        planeVelY = -4.5;
                         spacePressed = true;
                     }
                 }
@@ -427,8 +428,8 @@ public class GamePanel extends JPanel {
                 planeVelY = 0;
             }
             
-            // Bottom boundary - game over in manual mode
-            if (planeY > cachedGroundY - planeHeight) {
+            // Bottom boundary - game over in manual mode at screen bottom
+            if (planeY + planeHeight > 240) {
                 if (isManualControl) {
                     System.out.println("\n=== FELL OFF BOTTOM ===");
                     System.out.println("Player: " + playerName);
@@ -453,17 +454,44 @@ public class GamePanel extends JPanel {
                     planeVelY = 0;
                 }
             }
-            if (planeY > 200) {
+            
+            // AI mode bottom clamp
+            if (!isManualControl && planeY > 200) {
                 planeY = 200;
                 planeVelY = 0;
             }
 
-            // Collision detection
+            // Collision detection with triangular mountain peaks
             for (Obstacle obs : obstacles) {
                 if (planeX + planeWidth > obs.x && planeX < obs.x + PIPE_WIDTH) {
                     int topPipeHeight = obs.gapY - PIPE_GAP/2;
                     int bottomPipeY = obs.gapY + PIPE_GAP/2;
-                    if (planeY < topPipeHeight || planeY + planeHeight > bottomPipeY) {
+                    
+                    boolean collision = false;
+                    
+                    // Top mountain (pointing down) - triangle collision
+                    if (topPipeHeight > 0) {
+                        // Triangle: peak at (obs.x + PIPE_WIDTH/2, topPipeHeight), base from (obs.x, 0) to (obs.x + PIPE_WIDTH, 0)
+                        collision = collision || checkTriangleCollision(
+                            planeX, planeY, planeWidth, planeHeight,
+                            obs.x + PIPE_WIDTH/2, topPipeHeight,  // peak
+                            obs.x, 0,  // base left
+                            obs.x + PIPE_WIDTH, 0  // base right
+                        );
+                    }
+                    
+                    // Bottom mountain (pointing up) - triangle collision
+                    if (bottomPipeY < 240) {
+                        // Triangle: peak at (obs.x + PIPE_WIDTH/2, bottomPipeY), base from (obs.x, 240) to (obs.x + PIPE_WIDTH, 240)
+                        collision = collision || checkTriangleCollision(
+                            planeX, planeY, planeWidth, planeHeight,
+                            obs.x + PIPE_WIDTH/2, bottomPipeY,  // peak
+                            obs.x, 240,  // base left
+                            obs.x + PIPE_WIDTH, 240  // base right
+                        );
+                    }
+                    
+                    if (collision) {
                         System.out.println("\n=== COLLISION DETECTED ===");
                         System.out.println("Player: " + playerName);
                         System.out.println("Score: " + score);
@@ -492,9 +520,13 @@ public class GamePanel extends JPanel {
             }
         } else if (isLanding) {
             landingProgress++;
+            // Move plane to landing position
             if (planeY < cachedLandingY) {
                 planeY += 2;
                 if (planeY > cachedLandingY) planeY = cachedLandingY;
+            } else if (planeY > cachedLandingY) {
+                planeY -= 2;
+                if (planeY < cachedLandingY) planeY = cachedLandingY;
             }
             if (landingProgress > 60) {
                 isLanding = false;
@@ -632,11 +664,10 @@ public class GamePanel extends JPanel {
         }
 
         if (isGameOver) {
-            g2d.setColor(new Color(0, 0, 0, 180));
-            g2d.fillRect(0, 0, 320, 240);
-            g2d.setColor(Color.WHITE);
-            g2d.setFont(new Font("Arial", Font.BOLD, 36));
-            g2d.drawString("Game Over!", 70, 120);
+            // Draw "GAME OVER" using letter images with red tint
+            String gameOverText = "GAME OVER";
+            int textWidth = getTextWidth(gameOverText);
+            drawText(g2d, gameOverText, (320 - textWidth) / 2, 100, true);
         }
     }
 
@@ -650,6 +681,9 @@ public class GamePanel extends JPanel {
         if (isWorking && totalSeconds <= 5 && !platformSpawned) {
             platformSpawned = true;
             platformX = 320;
+            // Activate landing sequence - switch to AI and disable manual control
+            landingSequenceActive = true;
+            isManualControl = false;
         }
     }
 
@@ -660,6 +694,7 @@ public class GamePanel extends JPanel {
         isWorking = true;
         isLanding = false;
         isManualControl = false;  // Reset to AI control
+        landingSequenceActive = false;  // Reset landing sequence
         scrollX = 0;
         groundScrollX = 0;
         planeY = 100;
@@ -763,27 +798,55 @@ public class GamePanel extends JPanel {
     }
     
     private void drawText(Graphics2D g2d, String text, int x, int y) {
+        drawText(g2d, text, x, y, false);
+    }
+    
+    private void drawText(Graphics2D g2d, String text, int x, int y, boolean redTint) {
         int currentX = x;
         for (char c : text.toCharArray()) {
+            BufferedImage img = null;
             if (c >= '0' && c <= '9') {
-                BufferedImage img = numberImages[c - '0'];
-                g2d.drawImage(img, currentX, y - 18, null);
-                currentX += img.getWidth();
+                img = numberImages[c - '0'];
             } else if (c == ':') {
-                g2d.drawImage(numberColon, currentX, y - 18, null);
-                currentX += numberColon.getWidth();
+                img = numberColon;
             } else if (c >= 'A' && c <= 'Z') {
-                BufferedImage img = letterImages[c - 'A'];
-                g2d.drawImage(img, currentX, y - 18, null);
-                currentX += img.getWidth();
+                img = letterImages[c - 'A'];
             } else if (c >= 'a' && c <= 'z') {
-                BufferedImage img = letterImages[c - 'a'];
-                g2d.drawImage(img, currentX, y - 18, null);
-                currentX += img.getWidth();
+                img = letterImages[c - 'a'];
             } else if (c == ' ') {
                 currentX += 8;
+                continue;
+            }
+            
+            if (img != null) {
+                if (redTint) {
+                    img = applyRedTint(img);
+                }
+                g2d.drawImage(img, currentX, y - 18, null);
+                currentX += img.getWidth();
             }
         }
+    }
+    
+    private BufferedImage applyRedTint(BufferedImage src) {
+        BufferedImage tinted = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < src.getHeight(); y++) {
+            for (int x = 0; x < src.getWidth(); x++) {
+                int pixel = src.getRGB(x, y);
+                int alpha = (pixel >> 24) & 0xff;
+                int red = (pixel >> 16) & 0xff;
+                int green = (pixel >> 8) & 0xff;
+                int blue = pixel & 0xff;
+                
+                // Tint blue towards red
+                red = Math.min(255, red + blue / 2);
+                blue = blue / 2;
+                
+                int newPixel = (alpha << 24) | (red << 16) | (green << 8) | blue;
+                tinted.setRGB(x, y, newPixel);
+            }
+        }
+        return tinted;
     }
     
     private int getTextWidth(String text) {
@@ -939,6 +1002,37 @@ public class GamePanel extends JPanel {
             HighScoreEntry entry = highScoreTable.get(i);
             System.out.println("  " + (i+1) + ": " + entry.name + " - " + entry.score);
         }
+    }
+    
+    private boolean checkTriangleCollision(double rectX, double rectY, double rectW, double rectH,
+                                           double tx1, double ty1, double tx2, double ty2, double tx3, double ty3) {
+        // Check if any corner of the rectangle is inside the triangle
+        if (pointInTriangle(rectX, rectY, tx1, ty1, tx2, ty2, tx3, ty3)) return true;
+        if (pointInTriangle(rectX + rectW, rectY, tx1, ty1, tx2, ty2, tx3, ty3)) return true;
+        if (pointInTriangle(rectX, rectY + rectH, tx1, ty1, tx2, ty2, tx3, ty3)) return true;
+        if (pointInTriangle(rectX + rectW, rectY + rectH, tx1, ty1, tx2, ty2, tx3, ty3)) return true;
+        
+        // Check if any triangle vertex is inside the rectangle
+        if (tx1 >= rectX && tx1 <= rectX + rectW && ty1 >= rectY && ty1 <= rectY + rectH) return true;
+        if (tx2 >= rectX && tx2 <= rectX + rectW && ty2 >= rectY && ty2 <= rectY + rectH) return true;
+        if (tx3 >= rectX && tx3 <= rectX + rectW && ty3 >= rectY && ty3 <= rectY + rectH) return true;
+        
+        return false;
+    }
+    
+    private boolean pointInTriangle(double px, double py, double x1, double y1, double x2, double y2, double x3, double y3) {
+        double d1 = sign(px, py, x1, y1, x2, y2);
+        double d2 = sign(px, py, x2, y2, x3, y3);
+        double d3 = sign(px, py, x3, y3, x1, y1);
+        
+        boolean hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+        boolean hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+        
+        return !(hasNeg && hasPos);
+    }
+    
+    private double sign(double px, double py, double x1, double y1, double x2, double y2) {
+        return (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
     }
     
     private void loadHighScore() {
