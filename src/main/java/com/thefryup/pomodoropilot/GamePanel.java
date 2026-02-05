@@ -84,6 +84,14 @@ public class GamePanel extends JPanel {
     private float targetNightFilter = 0.0f;
     private int lastModeDecisionSecond = 0;
     private int globalFrameCounter = 0;
+    
+    // Fast forward mode
+    private int speedMultiplier = 1;
+    
+    // Night mode control
+    private boolean nightModeEnabled = true;
+    private boolean forceNightMode = false;
+    private boolean forceDayMode = false;
 
     public GamePanel() {
         setPreferredSize(new Dimension(320, 240));
@@ -136,11 +144,14 @@ public class GamePanel extends JPanel {
         
         new Thread(() -> {
             while (true) {
-                SwingUtilities.invokeLater(() -> {
-                    update();
-                    repaint();
-                    Toolkit.getDefaultToolkit().sync();
-                });
+                // Run multiple updates per frame when in fast forward
+                for (int i = 0; i < speedMultiplier; i++) {
+                    SwingUtilities.invokeLater(() -> {
+                        update();
+                        repaint();
+                        Toolkit.getDefaultToolkit().sync();
+                    });
+                }
                 try {
                     Thread.sleep(33);
                 } catch (InterruptedException e) {
@@ -296,9 +307,16 @@ public class GamePanel extends JPanel {
         int secondsElapsed = globalFrameCounter / 60;
         
         // Make mode decision every 15 seconds
-        if (secondsElapsed >= 15 && secondsElapsed / 15 > lastModeDecisionSecond / 15) {
+        if (nightModeEnabled && secondsElapsed >= 15 && secondsElapsed / 15 > lastModeDecisionSecond / 15) {
             targetNightFilter = Math.random() < 0.5 ? 0.0f : 1.0f;
             lastModeDecisionSecond = secondsElapsed;
+        }
+        
+        // Override with forced modes
+        if (forceNightMode) {
+            targetNightFilter = 1.0f;
+        } else if (forceDayMode) {
+            targetNightFilter = 0.0f;
         }
         
         // Transition over 5 seconds (300 frames)
@@ -803,6 +821,66 @@ public class GamePanel extends JPanel {
         currentTerrain = terrains[(int)(Math.random() * terrains.length)];
         loadImages();
         planeFrames = new BufferedImage[]{planeBlue1, planeBlue2, planeBlue3};
+    }
+    
+    public void saveScreenshot(String filename) {
+        try {
+            // Get the actual rendered size of the panel
+            int width = getWidth();
+            int height = getHeight();
+            
+            BufferedImage screenshot = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = screenshot.createGraphics();
+            paint(g);
+            g.dispose();
+            
+            java.io.File dir = new java.io.File("screenshots");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            
+            // Save original
+            java.io.File tempFile = new java.io.File(dir, "temp_" + filename);
+            ImageIO.write(screenshot, "PNG", tempFile);
+            
+            // Upscale 3x with ffmpeg using nearest neighbor
+            java.io.File outputFile = new java.io.File(dir, filename);
+            ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg", "-y", "-i", tempFile.getAbsolutePath(),
+                "-vf", "scale=iw*3:ih*3:flags=neighbor",
+                outputFile.getAbsolutePath()
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            process.waitFor();
+            
+            // Delete temp file
+            tempFile.delete();
+            
+            System.out.println("Screenshot saved: " + outputFile.getAbsolutePath() + " (" + (width*3) + "x" + (height*3) + ")");
+        } catch (IOException | InterruptedException e) {
+            System.err.println("Failed to save screenshot: " + e.getMessage());
+        }
+    }
+    
+    public void setSpeedMultiplier(int multiplier) {
+        this.speedMultiplier = Math.max(1, multiplier);
+    }
+    
+    public void setNightMode(String mode) {
+        if ("night".equals(mode)) {
+            forceNightMode = true;
+            forceDayMode = false;
+            nightModeEnabled = false;
+        } else if ("day".equals(mode)) {
+            forceNightMode = false;
+            forceDayMode = true;
+            nightModeEnabled = false;
+        } else if ("off".equals(mode)) {
+            forceNightMode = false;
+            forceDayMode = true;
+            nightModeEnabled = false;
+        }
     }
 
     public void startBreak() {

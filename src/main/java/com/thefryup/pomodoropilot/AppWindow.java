@@ -77,6 +77,18 @@ public class AppWindow extends JFrame {
     public void startBreak() {
         gamePanel.startBreak();
     }
+    
+    public void saveScreenshot(String filename) {
+        gamePanel.saveScreenshot(filename);
+    }
+    
+    public void setSpeedMultiplier(int multiplier) {
+        gamePanel.setSpeedMultiplier(multiplier);
+    }
+    
+    public void setNightMode(String mode) {
+        gamePanel.setNightMode(mode);
+    }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {

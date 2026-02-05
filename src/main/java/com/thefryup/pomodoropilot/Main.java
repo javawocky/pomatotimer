@@ -37,7 +37,10 @@ public class Main {
     public static void main(String[] args) throws InterruptedException, UnsupportedAudioFileException, LineUnavailableException, IOException {
         int workMinutes = 20 * 60;
         int breakMinutes = 5 * 60;
-        double fastForwardTo = 0;
+        double screenshotAt = -1;
+        String screenshotName = "screenshot.png";
+        boolean fastForward = false;
+        String nightMode = null;
         
         // Parse command line arguments
         for (int i = 0; i < args.length; i++) {
@@ -47,8 +50,14 @@ public class Main {
             } else if (args[i].equals("--break") && i + 1 < args.length) {
                 breakMinutes = (int)(Double.parseDouble(args[i + 1]) * 60);
                 i++;
-            } else if (args[i].equals("--fastforward") && i + 1 < args.length) {
-                fastForwardTo = Double.parseDouble(args[i + 1]) * 60;
+            } else if (args[i].equals("--screenshot") && i + 2 < args.length) {
+                screenshotAt = Double.parseDouble(args[i + 1]);
+                screenshotName = args[i + 2];
+                i += 2;
+            } else if (args[i].equals("--fastforward")) {
+                fastForward = true;
+            } else if (args[i].equals("--nightmode") && i + 1 < args.length) {
+                nightMode = args[i + 1];
                 i++;
             }
         }
@@ -61,13 +70,27 @@ public class Main {
         
         System.out.println("Work time: " + (workMinutes / 60.0) + " minutes");
         System.out.println("Break time: " + (breakMinutes / 60.0) + " minutes");
-        if (fastForwardTo > 0) {
-            System.out.println("Fast forward to: " + (fastForwardTo / 60.0) + " minutes");
+        if (screenshotAt >= 0) {
+            System.out.println("Screenshot at: " + screenshotAt + " seconds -> " + screenshotName);
+        }
+        if (fastForward) {
+            System.out.println("Fast forward mode enabled");
+        }
+        if (nightMode != null) {
+            System.out.println("Night mode: " + nightMode);
         }
 
         var jw = new AppWindow();
         int elapsedSeconds = 0;
-        boolean stateDumped = false;
+        boolean screenshotTaken = false;
+        
+        if (fastForward) {
+            jw.setSpeedMultiplier(60); // 60x speed
+        }
+        
+        if (nightMode != null) {
+            jw.setNightMode(nightMode);
+        }
 
         while(true) {
             System.out.println("\nStarting timer...");
@@ -81,21 +104,16 @@ public class Main {
                 System.out.print("\r" + progress + " " + getTimeRemaining(i));
                 jw.setTimeText(getTimeRemaining(i));
                 
-                // Fast forward mode - skip sleep
-                if (fastForwardTo > 0 && elapsedSeconds < fastForwardTo) {
-                    // Run game updates without delay
-                    for (int j = 0; j < 60; j++) {
-                        jw.updateGame();
-                    }
-                } else {
-                    // Check if we just reached the fast forward point
-                    if (fastForwardTo > 0 && !stateDumped && elapsedSeconds >= (int)fastForwardTo) {
-                        System.out.println("\n\n=== FAST FORWARD COMPLETE - STATE DUMP ===");
-                        jw.dumpState();
-                        System.out.println("==========================================\n");
+                Thread.sleep(fastForward ? 17 : 1000);
+                
+                // Take screenshot if at the right time
+                if (screenshotAt >= 0 && !screenshotTaken && elapsedSeconds >= screenshotAt) {
+                    Thread.sleep(100); // Let UI update
+                    jw.saveScreenshot(screenshotName);
+                    screenshotTaken = true;
+                    if (screenshotAt > 0) {
                         System.exit(0);
                     }
-                    Thread.sleep(1000);
                 }
                 
                 if(jw.isSkip()) break;
@@ -112,21 +130,16 @@ public class Main {
                 System.out.print("\r" + progress + " " + getTimeRemaining(i));
                 jw.setTimeText(getTimeRemaining(i));
                 
-                // Fast forward mode - skip sleep
-                if (fastForwardTo > 0 && elapsedSeconds < fastForwardTo) {
-                    // Run game updates without delay
-                    for (int j = 0; j < 60; j++) {
-                        jw.updateGame();
-                    }
-                } else {
-                    // Check if we just reached the fast forward point
-                    if (fastForwardTo > 0 && !stateDumped && elapsedSeconds >= (int)fastForwardTo) {
-                        System.out.println("\n\n=== FAST FORWARD COMPLETE - STATE DUMP ===");
-                        jw.dumpState();
-                        System.out.println("==========================================\n");
+                Thread.sleep(fastForward ? 17 : 1000);
+                
+                // Take screenshot if at the right time
+                if (screenshotAt >= 0 && !screenshotTaken && elapsedSeconds >= screenshotAt) {
+                    Thread.sleep(100); // Let UI update
+                    jw.saveScreenshot(screenshotName);
+                    screenshotTaken = true;
+                    if (screenshotAt > 0) {
                         System.exit(0);
                     }
-                    Thread.sleep(1000);
                 }
                 
                 if(jw.isSkip()) break;
@@ -135,28 +148,6 @@ public class Main {
             System.out.println("\nTimer finished!");
         }
     }
-    private static int getUserInput(String type, int defaultValue) {
-        int input;
-        do {
-            System.out.print("Enter a number between 1 and 59 (" + type + " minutes, default " + defaultValue + "): ");
-            String userInput = scanner.nextLine();
-            if (userInput.isEmpty()) {
-                input = defaultValue;
-                break;
-            }
-            while (!userInput.matches("\\d+") || (input = Integer.parseInt(userInput)) < 1 || input > 59) {
-                System.out.println("That's not a valid number!");
-                System.out.print("Enter a number between 1 and 59 (" + type + " minutes, default " + defaultValue + "): ");
-                userInput = scanner.nextLine();
-                if (userInput.isEmpty()) {
-                    input = defaultValue;
-                    break;
-                }
-            }
-        } while (input < 1 || input > 59);
-        return input;
-    }
-    
 
     private static String getProgressBar(int remainingSeconds, int totalSeconds) {
         int numFilled = (totalSeconds - remainingSeconds) * 7 / totalSeconds;

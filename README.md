@@ -2,6 +2,8 @@
 
 A Pomodoro timer with an integrated Flappy Bird-style game to keep you focused during work sessions.
 
+![Pomodoro Pilot Intro](screenshots/intro.png)
+
 ## How to Play
 
 ### Game Modes
@@ -108,3 +110,29 @@ The compiled JAR will be in `target/PomatoTimer-1.0-SNAPSHOT-jar-with-dependenci
 ## Credits
 
 Graphics by [Kenney](https://kenney.nl/assets/tappy-plane) - Tappy Plane asset pack
+
+## Screenshots
+
+### Gameplay
+
+![Gameplay at 2 minutes](screenshots/gameplay-2min.png)
+*Gameplay at 2 minutes - navigating through obstacles*
+
+![Gameplay at 3 minutes](screenshots/gameplay-3min.png)
+*Gameplay at 3 minutes - difficulty increases*
+
+![Gameplay at 9 minutes](screenshots/gameplay-9min.png)
+*Gameplay at 9 minutes - maximum difficulty*
+
+### Break Phase
+
+![Break Phase](screenshots/break.png)
+*Break phase with scrolling high score table*
+
+### Night Mode
+
+![Night Mode at 2 minutes](screenshots/gameplay-night-2min.png)
+*Night mode gameplay at 2 minutes*
+
+![Night Mode at 5 minutes](screenshots/gameplay-night-5min.png)
+*Night mode gameplay at 5 minutes*
