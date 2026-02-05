@@ -102,3 +102,7 @@ The compiled JAR will be in `target/PomatoTimer-1.0-SNAPSHOT-jar-with-dependenci
 - 320x240 native resolution (scales to window size)
 - Pixel art graphics with dynamic color filtering
 - Collision detection using triangle geometry for mountain peaks
+
+## Credits
+
+Graphics by [Kenney](https://kenney.nl/assets/tappy-plane) - Tappy Plane asset pack
