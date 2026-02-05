@@ -76,6 +76,14 @@ public class GamePanel extends JPanel {
     private static final int PIPE_GAP = 80;
     private static final double GRAVITY = 0.5;
     private static final double JUMP_STRENGTH = -4.5;
+    
+    // Night mode - global timer independent of game state
+    private float nightFilter = 0.0f; // 0.0 = day, 1.0 = full night
+    private int lastNightFilterFrame = -1;
+    private BufferedImage[] cachedNightImages = null;
+    private float targetNightFilter = 0.0f;
+    private int lastModeDecisionSecond = 0;
+    private int globalFrameCounter = 0;
 
     public GamePanel() {
         setPreferredSize(new Dimension(320, 240));
@@ -251,8 +259,55 @@ public class GamePanel extends JPanel {
         }
         return result;
     }
+    
+    private BufferedImage applyNightFilter(BufferedImage img, float intensity) {
+        BufferedImage result = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int rgb = img.getRGB(x, y);
+                int a = (rgb >> 24) & 0xff;
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                
+                // Darken and shift towards blue
+                r = (int)(r * (1.0f - intensity * 0.6f));
+                g = (int)(g * (1.0f - intensity * 0.5f));
+                b = (int)(b * (1.0f - intensity * 0.3f) + 40 * intensity);
+                
+                result.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+            }
+        }
+        return result;
+    }
+    
+    private BufferedImage getNightFilteredImage(BufferedImage img) {
+        if (nightFilter == 0.0f) {
+            return img;
+        }
+        return applyNightFilter(img, nightFilter);
+    }
 
     private void update() {
+        // Always increment global frame counter for night mode
+        globalFrameCounter++;
+        
+        // Update night filter: random day/night every 15 seconds after initial 15s
+        int secondsElapsed = globalFrameCounter / 60;
+        
+        // Make mode decision every 15 seconds
+        if (secondsElapsed >= 15 && secondsElapsed / 15 > lastModeDecisionSecond / 15) {
+            targetNightFilter = Math.random() < 0.5 ? 0.0f : 1.0f;
+            lastModeDecisionSecond = secondsElapsed;
+        }
+        
+        // Transition over 5 seconds (300 frames)
+        if (nightFilter < targetNightFilter) {
+            nightFilter = Math.min(targetNightFilter, nightFilter + 1.0f / 300.0f);
+        } else if (nightFilter > targetNightFilter) {
+            nightFilter = Math.max(targetNightFilter, nightFilter - 1.0f / 300.0f);
+        }
+        
         // Update intro timer
         if (showIntro) {
             introTimer++;
@@ -352,7 +407,6 @@ public class GamePanel extends JPanel {
             
             if (!platformSpawned) {
                 // Calculate max obstacles based on time: 2 for first 3s, 3 for next 3s, etc.
-                int secondsElapsed = frameCounter / 60;
                 int maxObstacles = 2 + (secondsElapsed / 3);
                 
                 // Count only obstacles ahead of the player
@@ -579,40 +633,49 @@ public class GamePanel extends JPanel {
         if (renderBackground) {
             int bgWidth = background.getWidth();
             double bgX = scrollX % bgWidth;
-            g2d.drawImage(background, (int)bgX, 0, null);
-            g2d.drawImage(background, (int)(bgX - bgWidth), 0, null);
-            g2d.drawImage(background, (int)(bgX + bgWidth), 0, null);
+            BufferedImage bgFiltered = getNightFilteredImage(background);
+            g2d.drawImage(bgFiltered, (int)bgX, 0, null);
+            g2d.drawImage(bgFiltered, (int)(bgX - bgWidth), 0, null);
+            g2d.drawImage(bgFiltered, (int)(bgX + bgWidth), 0, null);
 
             int gWidth = ground.getWidth();
             double gX = groundScrollX % gWidth;
-            g2d.drawImage(ground, (int)gX, cachedGroundY, null);
-            g2d.drawImage(ground, (int)(gX - gWidth), cachedGroundY, null);
-            g2d.drawImage(ground, (int)(gX + gWidth), cachedGroundY, null);
+            BufferedImage groundFiltered = getNightFilteredImage(ground);
+            g2d.drawImage(groundFiltered, (int)gX, cachedGroundY, null);
+            g2d.drawImage(groundFiltered, (int)(gX - gWidth), cachedGroundY, null);
+            g2d.drawImage(groundFiltered, (int)(gX + gWidth), cachedGroundY, null);
         }
 
+        BufferedImage rockFiltered = getNightFilteredImage(rock);
+        BufferedImage rockDownFiltered = getNightFilteredImage(rockDown);
+        
         for (Obstacle obs : obstacles) {
             int topPipeHeight = obs.gapY - PIPE_GAP/2;
             int bottomPipeY = obs.gapY + PIPE_GAP/2;
             
             if (topPipeHeight > 0) {
-                g2d.drawImage(rockDown, obs.x, 0, PIPE_WIDTH, topPipeHeight, null);
+                g2d.drawImage(rockDownFiltered, obs.x, 0, PIPE_WIDTH, topPipeHeight, null);
             }
             if (bottomPipeY < 240) {
-                g2d.drawImage(rock, obs.x, bottomPipeY, PIPE_WIDTH, 240 - bottomPipeY, null);
+                g2d.drawImage(rockFiltered, obs.x, bottomPipeY, PIPE_WIDTH, 240 - bottomPipeY, null);
             }
         }
 
+        BufferedImage platformFiltered = getNightFilteredImage(platform);
+        
         if (platformSpawned && platformX > -100) {
-            g2d.drawImage(platform, platformX, cachedLandingY + planeHeight, null);
+            g2d.drawImage(platformFiltered, platformX, cachedLandingY + planeHeight, null);
         }
 
+        BufferedImage planeFiltered = getNightFilteredImage(planeFrames[(frameCounter / 5) % 3]);
+        
         if (!isLanding) {
-            g2d.drawImage(planeFrames[(frameCounter / 5) % 3], 80, (int)planeY, null);
+            g2d.drawImage(planeFiltered, 80, (int)planeY, null);
         } else {
             if (platformX > -100) {
-                g2d.drawImage(platform, 80, cachedLandingY + planeHeight, null);
+                g2d.drawImage(platformFiltered, 80, cachedLandingY + planeHeight, null);
             }
-            g2d.drawImage(planeFrames[0], 80, (int)planeY, null);
+            g2d.drawImage(getNightFilteredImage(planeFrames[0]), 80, (int)planeY, null);
         }
         
         if (!isWorking) {
@@ -625,14 +688,15 @@ public class GamePanel extends JPanel {
                     default: frames = new BufferedImage[]{planeYellow1, planeYellow2, planeYellow3}; break;
                 }
                 BufferedImage planeImg = frames[(frameCounter / 5) % 3];
+                BufferedImage planeImgFiltered = getNightFilteredImage(planeImg);
                 if (bp.speed < 0) {
-                    BufferedImage flipped = new BufferedImage(planeImg.getWidth(), planeImg.getHeight(), BufferedImage.TYPE_INT_ARGB);
+                    BufferedImage flipped = new BufferedImage(planeImgFiltered.getWidth(), planeImgFiltered.getHeight(), BufferedImage.TYPE_INT_ARGB);
                     Graphics2D gFlip = flipped.createGraphics();
-                    gFlip.drawImage(planeImg, planeImg.getWidth(), 0, -planeImg.getWidth(), planeImg.getHeight(), null);
+                    gFlip.drawImage(planeImgFiltered, planeImgFiltered.getWidth(), 0, -planeImgFiltered.getWidth(), planeImgFiltered.getHeight(), null);
                     gFlip.dispose();
                     g2d.drawImage(flipped, (int)bp.x, (int)bp.y, null);
                 } else {
-                    g2d.drawImage(planeImg, (int)bp.x, (int)bp.y, null);
+                    g2d.drawImage(planeImgFiltered, (int)bp.x, (int)bp.y, null);
                 }
             }
         }
@@ -728,6 +792,7 @@ public class GamePanel extends JPanel {
         frameCounter = 0;
         introTimer = 0;
         showIntro = true;
+        // Don't reset night mode - it persists across games
         
         System.out.println("\n=== STARTING WORK PHASE ===");
         System.out.println("Player: " + playerName);
