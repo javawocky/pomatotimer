@@ -40,6 +40,8 @@ public class GamePanel extends JPanel {
     private boolean isWorking = true;
     private boolean isLanding = false;
     private boolean isGameOver = false;
+    private boolean isManualControl = false;
+    private boolean spacePressed = false;
     private int gameOverTimer = 0;
     private int landingProgress = 0;
     private String timeText = "00:00";
@@ -104,6 +106,20 @@ public class GamePanel extends JPanel {
                     toggleFullscreen();
                 } else if (e.getKeyCode() == KeyEvent.VK_B) {
                     renderBackground = !renderBackground;
+                } else if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                    if (isWorking && !isGameOver && !spacePressed) {
+                        isManualControl = true;
+                        // Jump with shorter influence
+                        planeVelY = -6;
+                        spacePressed = true;
+                    }
+                }
+            }
+            
+            @Override
+            public void keyReleased(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                    spacePressed = false;
                 }
             }
         });
@@ -372,34 +388,70 @@ public class GamePanel extends JPanel {
                 }
             }
 
-            if (platformSpawned && platformX < 100) {
-                targetY = cachedLandingY;
-            } else if (nextObs != null) {
-                targetY = nextObs.gapY;
-            } else {
-                targetY = 100;
-            }
+            // AI or manual control
+            if (!isManualControl) {
+                // AI control
+                if (platformSpawned && platformX < 100) {
+                    targetY = cachedLandingY;
+                } else if (nextObs != null) {
+                    targetY = nextObs.gapY;
+                } else {
+                    targetY = 100;
+                }
 
-            jumpTimer++;
-            if (jumpTimer > 12) {
-                double predictedY = planeY + planeVelY * 8;
-                if (predictedY > targetY + 15 || planeY > targetY + 10) {
-                    planeVelY = JUMP_STRENGTH;
-                    jumpTimer = 0;
+                jumpTimer++;
+                if (jumpTimer > 12) {
+                    double predictedY = planeY + planeVelY * 8;
+                    if (predictedY > targetY + 15 || planeY > targetY + 10) {
+                        planeVelY = JUMP_STRENGTH;
+                        jumpTimer = 0;
+                    }
                 }
             }
 
+            // Physics for both AI and manual
             planeVelY += GRAVITY;
             planeY += planeVelY;
 
-            double lerpFactor = 0.05;
-            if (planeY > targetY) {
-                planeY += (targetY - planeY) * lerpFactor;
+            // AI lerp smoothing
+            if (!isManualControl) {
+                double lerpFactor = 0.05;
+                if (planeY > targetY) {
+                    planeY += (targetY - planeY) * lerpFactor;
+                }
             }
 
+            // Top boundary
             if (planeY < 10) {
                 planeY = 10;
                 planeVelY = 0;
+            }
+            
+            // Bottom boundary - game over in manual mode
+            if (planeY > cachedGroundY - planeHeight) {
+                if (isManualControl) {
+                    System.out.println("\n=== FELL OFF BOTTOM ===");
+                    System.out.println("Player: " + playerName);
+                    System.out.println("Score: " + score);
+                    
+                    isGameOver = true;
+                    gameOverTimer = 0;
+                    
+                    if (score > highScore) {
+                        highScore = score;
+                    }
+                    boolean qualifies = highScoreTable.size() < 5 || score > highScoreTable.get(4).score;
+                    if (qualifies) {
+                        addHighScore(playerName, score);
+                        showNewHighScore = true;
+                        newHighScoreTimer = 0;
+                        newHighScoreValue = score;
+                    }
+                    System.out.println("========================\n");
+                } else {
+                    planeY = cachedGroundY - planeHeight;
+                    planeVelY = 0;
+                }
             }
             if (planeY > 200) {
                 planeY = 200;
@@ -607,6 +659,7 @@ public class GamePanel extends JPanel {
         
         isWorking = true;
         isLanding = false;
+        isManualControl = false;  // Reset to AI control
         scrollX = 0;
         groundScrollX = 0;
         planeY = 100;
@@ -878,6 +931,7 @@ public class GamePanel extends JPanel {
         System.out.println("High Score: " + highScore);
         System.out.println("Is Working: " + isWorking);
         System.out.println("Is Game Over: " + isGameOver);
+        System.out.println("Is Manual Control: " + isManualControl);
         System.out.println("Show New High Score: " + showNewHighScore);
         System.out.println("New High Score Value: " + newHighScoreValue);
         System.out.println("\nHigh Score Table:");
