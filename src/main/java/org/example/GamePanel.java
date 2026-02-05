@@ -27,6 +27,7 @@ public class GamePanel extends JPanel {
     private double targetY = 100;
     private int frameCounter = 0;
     private int jumpTimer = 0;
+    private int spawnTimer = 0;
     private int platformX = -100;
     private boolean platformSpawned = false;
     private String currentPlaneColor = "Blue";
@@ -347,13 +348,28 @@ public class GamePanel extends JPanel {
             }
 
             frameCounter++;
+            spawnTimer++;
             
             if (!platformSpawned) {
-                int spawnInterval = Math.max(24, 120 - (frameCounter / 150));
+                // Calculate max obstacles based on time: 2 for first 3s, 3 for next 3s, etc.
+                int secondsElapsed = frameCounter / 60;
+                int maxObstacles = 2 + (secondsElapsed / 3);
                 
-                if (frameCounter % spawnInterval == 0) {
-                    int gapY = 60 + (int)(Math.random() * 100);
+                // Count only obstacles ahead of the player
+                int planeX = 80;
+                long obstaclesAhead = obstacles.stream().filter(obs -> obs.x + PIPE_WIDTH > planeX).count();
+                
+                // Much faster spawn ramp: reach 24 frames in 30 seconds (30 * 60 / 96 = 18.75)
+                int spawnInterval = Math.max(24, 120 - (frameCounter / 19));
+                
+                if (spawnTimer >= spawnInterval && obstaclesAhead < maxObstacles) {
+                    int gapY = 50 + (int)(Math.random() * 120);
                     obstacles.add(new Obstacle(320 + PIPE_WIDTH, gapY));
+                    spawnTimer = 0;
+                    // Debug: print spawn interval every 10 obstacles
+                    if (score % 100 == 0) {
+                        System.out.println("Sec: " + secondsElapsed + ", Max: " + maxObstacles + ", Ahead: " + obstaclesAhead + ", Total: " + obstacles.size() + ", Interval: " + spawnInterval);
+                    }
                 }
             }
 
@@ -701,6 +717,7 @@ public class GamePanel extends JPanel {
         planeVelY = 0;
         targetY = 100;
         jumpTimer = 0;
+        spawnTimer = 0;
         score = 0;
         platformX = -100;
         platformSpawned = false;
