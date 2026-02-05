@@ -27,6 +27,8 @@ A Pomodoro timer with an integrated Flappy Bird-style game to keep you focused d
 
 - **SPACE** - Jump (take manual control during work phase)
 - **B** - Toggle background rendering on/off
+- **F** - Toggle fullscreen mode
+- **Click anywhere** - Show/hide Skip and Exit buttons
 
 ### Features
 
