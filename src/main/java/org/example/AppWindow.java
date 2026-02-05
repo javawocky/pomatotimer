@@ -104,4 +104,12 @@ public class AppWindow extends JFrame {
     private void toggleNavVisible() {
         this.topNavBits.setVisible(!this.topNavBits.isVisible());
     }
+    
+    public void updateGame() {
+        gamePanel.updatePublic();
+    }
+    
+    public void dumpState() {
+        gamePanel.dumpState();
+    }
 }

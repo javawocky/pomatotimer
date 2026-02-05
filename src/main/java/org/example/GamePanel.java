@@ -64,6 +64,11 @@ public class GamePanel extends JPanel {
     private String playerName;
     private java.util.List<HighScoreEntry> highScoreTable = new java.util.ArrayList<>();
     private int highScoreScrollX = 0;
+    private int introTimer = 0;
+    private boolean showIntro = false;
+    private int newHighScoreTimer = 0;
+    private boolean showNewHighScore = false;
+    private int newHighScoreValue = 0;
     private static final int PIPE_GAP = 80;
     private static final double GRAVITY = 0.5;
     private static final double JUMP_STRENGTH = -4;
@@ -74,8 +79,13 @@ public class GamePanel extends JPanel {
         
         System.setProperty("sun.java2d.opengl", "true");
         
-        loadHighScore();
         initializeHighScoreTable();
+        
+        // Set high score to the highest score in the table
+        if (highScoreTable.size() > 0) {
+            highScore = highScoreTable.get(0).score;
+        }
+        
         playerName = generateRandomName();
         
         String[] colors = {"Blue", "Green", "Red", "Yellow"};
@@ -225,16 +235,25 @@ public class GamePanel extends JPanel {
     }
 
     private void update() {
+        // Update intro timer
+        if (showIntro) {
+            introTimer++;
+            if (introTimer >= 300) { // 5 seconds at 60fps
+                showIntro = false;
+            }
+        }
+        
+        // Update new high score timer
+        if (showNewHighScore) {
+            newHighScoreTimer++;
+            if (newHighScoreTimer >= 300) { // 5 seconds at 60fps
+                showNewHighScore = false;
+            }
+        }
+        
         if (isGameOver) {
             gameOverTimer++;
             if (gameOverTimer > 90) {
-                if (score > highScore) {
-                    highScore = score;
-                }
-                // Check if score qualifies for high score table
-                if (highScoreTable.size() < 5 || score > highScoreTable.get(4).score) {
-                    addHighScore(playerName, score);
-                }
                 isGameOver = false;
                 gameOverTimer = 0;
                 playerName = generateRandomName();
@@ -393,8 +412,29 @@ public class GamePanel extends JPanel {
                     int topPipeHeight = obs.gapY - PIPE_GAP/2;
                     int bottomPipeY = obs.gapY + PIPE_GAP/2;
                     if (planeY < topPipeHeight || planeY + planeHeight > bottomPipeY) {
+                        System.out.println("\n=== COLLISION DETECTED ===");
+                        System.out.println("Player: " + playerName);
+                        System.out.println("Score: " + score);
+                        
                         isGameOver = true;
                         gameOverTimer = 0;
+                        
+                        // Update high score immediately
+                        if (score > highScore) {
+                            highScore = score;
+                            System.out.println("New high score: " + highScore);
+                        }
+                        // Check if score qualifies for high score table
+                        boolean qualifies = highScoreTable.size() < 5 || score > highScoreTable.get(4).score;
+                        System.out.println("Qualifies for table: " + qualifies);
+                        if (qualifies) {
+                            addHighScore(playerName, score);
+                            showNewHighScore = true;
+                            newHighScoreTimer = 0;
+                            newHighScoreValue = score;
+                            System.out.println("Added to high score table");
+                        }
+                        System.out.println("========================\n");
                     }
                 }
             }
@@ -517,6 +557,27 @@ public class GamePanel extends JPanel {
                 highScoreScrollX = 320;
             }
         }
+        
+        // Draw intro message
+        if (showIntro && (introTimer / 15) % 2 == 0) { // Flash 4 times per second (60fps / 15 = 4Hz)
+            String introMessage = "LETS GO " + playerName;
+            int introWidth = getTextWidth(introMessage);
+            drawText(g2d, introMessage, (320 - introWidth) / 2, 120);
+        }
+        
+        // Draw new high score message
+        if (showNewHighScore) {
+            String message = "NEW HIGH SCORE";
+            int messageWidth = getTextWidth(message);
+            drawText(g2d, message, (320 - messageWidth) / 2, 110);
+            
+            // Flash score 6 times per second (60fps / 10 = 6Hz)
+            if ((newHighScoreTimer / 10) % 2 == 0) {
+                String newScoreText = String.format("%05d", newHighScoreValue);
+                int newScoreWidth = getTextWidth(newScoreText);
+                drawText(g2d, newScoreText, (320 - newScoreWidth) / 2, 130);
+            }
+        }
 
         if (isGameOver) {
             g2d.setColor(new Color(0, 0, 0, 180));
@@ -541,6 +602,9 @@ public class GamePanel extends JPanel {
     }
 
     public void startWork() {
+        // Generate new player name for new round
+        playerName = generateRandomName();
+        
         isWorking = true;
         isLanding = false;
         scrollX = 0;
@@ -554,6 +618,11 @@ public class GamePanel extends JPanel {
         platformSpawned = false;
         obstacles.clear();
         frameCounter = 0;
+        introTimer = 0;
+        showIntro = true;
+        
+        System.out.println("\n=== STARTING WORK PHASE ===");
+        System.out.println("Player: " + playerName);
         
         String[] colors = {"Blue", "Green", "Red", "Yellow"};
         String[] terrains = {"Grass", "Ice", "Snow"};
@@ -564,6 +633,40 @@ public class GamePanel extends JPanel {
     }
 
     public void startBreak() {
+        System.out.println("\n=== STARTING BREAK PHASE ===");
+        System.out.println("Player: " + playerName);
+        System.out.println("Current Score: " + score);
+        System.out.println("Current High Score: " + highScore);
+        
+        System.out.println("\nHigh Score Table BEFORE update:");
+        for (int i = 0; i < highScoreTable.size(); i++) {
+            HighScoreEntry entry = highScoreTable.get(i);
+            System.out.println("  " + (i+1) + ": " + entry.name + " - " + entry.score);
+        }
+        
+        // Update high score table with current score
+        if (score > highScore) {
+            highScore = score;
+            System.out.println("\nUpdated high score to: " + highScore);
+        }
+        
+        boolean qualifies = highScoreTable.size() < 5 || score > highScoreTable.get(4).score;
+        System.out.println("\nQualifies for high score table: " + qualifies);
+        if (qualifies) {
+            System.out.println("Adding " + playerName + " with score " + score);
+            addHighScore(playerName, score);
+            showNewHighScore = true;
+            newHighScoreTimer = 0;
+            newHighScoreValue = score;
+        }
+        
+        System.out.println("\nHigh Score Table AFTER update:");
+        for (int i = 0; i < highScoreTable.size(); i++) {
+            HighScoreEntry entry = highScoreTable.get(i);
+            System.out.println("  " + (i+1) + ": " + entry.name + " - " + entry.score);
+        }
+        System.out.println("========================\n");
+        
         isWorking = false;
         isLanding = true;
         landingProgress = 0;
@@ -735,6 +838,53 @@ public class GamePanel extends JPanel {
     
     public void addHighScorePublic(String name, int score) {
         addHighScore(name, score);
+    }
+    
+    public String getPlayerName() {
+        return playerName;
+    }
+    
+    public int getScore() {
+        return score;
+    }
+    
+    public void updatePublic() {
+        update();
+    }
+    
+    public boolean isGameOver() {
+        return isGameOver;
+    }
+    
+    public void setPlaneY(double y) {
+        this.planeY = y;
+    }
+    
+    public boolean isShowNewHighScore() {
+        return showNewHighScore;
+    }
+    
+    public int getNewHighScoreValue() {
+        return newHighScoreValue;
+    }
+    
+    public void setScoreForTest(int score) {
+        this.score = score;
+    }
+    
+    public void dumpState() {
+        System.out.println("Player: " + playerName);
+        System.out.println("Score: " + score);
+        System.out.println("High Score: " + highScore);
+        System.out.println("Is Working: " + isWorking);
+        System.out.println("Is Game Over: " + isGameOver);
+        System.out.println("Show New High Score: " + showNewHighScore);
+        System.out.println("New High Score Value: " + newHighScoreValue);
+        System.out.println("\nHigh Score Table:");
+        for (int i = 0; i < highScoreTable.size(); i++) {
+            HighScoreEntry entry = highScoreTable.get(i);
+            System.out.println("  " + (i+1) + ": " + entry.name + " - " + entry.score);
+        }
     }
     
     private void loadHighScore() {
