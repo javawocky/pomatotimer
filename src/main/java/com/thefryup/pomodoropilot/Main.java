@@ -1,4 +1,4 @@
-package org.example;
+package com.thefryup.pomodoropilot;
 
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;

@@ -1,4 +1,4 @@
-package org.example;
+package com.thefryup.pomodoropilot;
 
 import java.io.IOException;
 import java.io.InputStream;
