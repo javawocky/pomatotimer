@@ -9,6 +9,7 @@ import java.awt.event.MouseMotionAdapter;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -92,6 +93,14 @@ public class GamePanel extends JPanel {
     private boolean nightModeEnabled = true;
     private boolean forceNightMode = false;
     private boolean forceDayMode = false;
+    
+    // Raycast visualization
+    private boolean showRaycasts = true;
+    private RaycastSensor.RayResult[] currentRays = null;
+    
+    // AI Learning mode
+    private boolean aiLearningMode = true; // Default to ML mode
+    private EvolutionManager evolutionManager = null;
 
     public GamePanel() {
         setPreferredSize(new Dimension(320, 240));
@@ -124,8 +133,17 @@ public class GamePanel extends JPanel {
                     toggleFullscreen();
                 } else if (e.getKeyCode() == KeyEvent.VK_B) {
                     renderBackground = !renderBackground;
+                } else if (e.getKeyCode() == KeyEvent.VK_R) {
+                    showRaycasts = !showRaycasts;
+                    System.out.println("Raycasts: " + (showRaycasts ? "ON" : "OFF"));
+                } else if (e.getKeyCode() == KeyEvent.VK_A) {
+                    aiLearningMode = !aiLearningMode;
+                    System.out.println("AI Mode: " + (aiLearningMode ? "LEARNING (ML)" : "CLASSIC"));
+                    if (isWorking) {
+                        startWork(); // Restart to apply mode change
+                    }
                 } else if (e.getKeyCode() == KeyEvent.VK_SPACE) {
-                    if (isWorking && !isGameOver && !spacePressed && !landingSequenceActive) {
+                    if (isWorking && !isGameOver && !spacePressed && !landingSequenceActive && planeY > 15) {
                         isManualControl = true;
                         // Jump - halfway between -3 and -6
                         planeVelY = -4.5;
@@ -460,16 +478,66 @@ public class GamePanel extends JPanel {
                 obs.x -= 3;
                 if (!obs.scored && obs.x + PIPE_WIDTH < 80) {
                     obs.scored = true;
-                    score += 10;
-                    if (score > highScore) {
-                        highScore = score;
-                        saveHighScore();
+                    if (aiLearningMode && evolutionManager != null) {
+                        // Score all alive planes
+                        for (AIPlane plane : evolutionManager.getPopulation()) {
+                            if (plane.alive) {
+                                plane.score += 10;
+                            }
+                        }
+                    } else {
+                        score += 10;
+                        if (score > highScore) {
+                            highScore = score;
+                            saveHighScore();
+                        }
                     }
                 }
             }
             obstacles.removeIf(obs -> obs.x < -PIPE_WIDTH - 50);
 
             int planeX = 80;
+            
+            // ML Learning Mode
+            if (aiLearningMode && evolutionManager != null) {
+                // Update all AI planes
+                for (AIPlane plane : evolutionManager.getPopulation()) {
+                    if (plane.alive) {
+                        RaycastSensor.RayResult[] rays = RaycastSensor.castRays(
+                            planeX + planeWidth/2, plane.y + planeHeight/2, obstacles);
+                        plane.update(rays, planeHeight);
+                        
+                        // Check collisions
+                        for (Obstacle obs : obstacles) {
+                            plane.checkCollision(obs, planeX, planeWidth, planeHeight);
+                        }
+                    }
+                }
+                
+                // Use first plane's raycast for visualization
+                if (!evolutionManager.getPopulation().isEmpty()) {
+                    AIPlane firstPlane = evolutionManager.getPopulation().get(0);
+                    currentRays = RaycastSensor.castRays(
+                        planeX + planeWidth/2, firstPlane.y + planeHeight/2, obstacles);
+                }
+                
+                // Check if generation is complete
+                if (evolutionManager.allDead()) {
+                    evolutionManager.evolveNextGeneration();
+                    // Reset game state for new generation
+                    obstacles.clear();
+                    frameCounter = 0;
+                    spawnTimer = 0;
+                }
+                
+                return; // Skip classic AI logic
+            }
+            
+            // Classic AI Mode (original logic)
+            
+            // Calculate raycasts for visualization and future AI use
+            currentRays = RaycastSensor.castRays(planeX + planeWidth/2, planeY + planeHeight/2, obstacles);
+            
             Obstacle nextObs = null;
             for (Obstacle obs : obstacles) {
                 if (obs.x + PIPE_WIDTH > planeX && (nextObs == null || obs.x < nextObs.x)) {
@@ -491,8 +559,8 @@ public class GamePanel extends JPanel {
                 jumpTimer++;
                 if (jumpTimer > 12) {
                     double predictedY = planeY + planeVelY * 8;
-                    // Only jump if target is above us or we're falling too far below target
-                    if ((predictedY > targetY + 15 || planeY > targetY + 10) && targetY < planeY) {
+                    // Only jump if target is above us or we're falling too far below target, and not too high
+                    if ((predictedY > targetY + 15 || planeY > targetY + 10) && targetY < planeY && planeY > 15) {
                         planeVelY = JUMP_STRENGTH;
                         jumpTimer = 0;
                     }
@@ -685,15 +753,44 @@ public class GamePanel extends JPanel {
             g2d.drawImage(platformFiltered, platformX, cachedLandingY + planeHeight, null);
         }
 
-        BufferedImage planeFiltered = getNightFilteredImage(planeFrames[(frameCounter / 5) % 3]);
-        
-        if (!isLanding) {
-            g2d.drawImage(planeFiltered, 80, (int)planeY, null);
-        } else {
-            if (platformX > -100) {
-                g2d.drawImage(platformFiltered, 80, cachedLandingY + planeHeight, null);
+        // Draw planes
+        if (aiLearningMode && evolutionManager != null && isWorking) {
+            // ML Mode: Draw all AI planes
+            BufferedImage[][] colorFrames = {
+                {planeBlue1, planeBlue2, planeBlue3},
+                {planeRed1, planeRed2, planeRed3},
+                {planeGreen1, planeGreen2, planeGreen3},
+                {planeYellow1, planeYellow2, planeYellow3}
+            };
+            
+            for (AIPlane plane : evolutionManager.getPopulation()) {
+                if (plane.alive) {
+                    BufferedImage[] frames = colorFrames[plane.colorIndex];
+                    BufferedImage planeImg = getNightFilteredImage(frames[(frameCounter / 5) % 3]);
+                    g2d.drawImage(planeImg, 80, (int)plane.y, null);
+                    
+                    // Draw raycasts for this plane
+                    if (showRaycasts) {
+                        RaycastSensor.RayResult[] rays = RaycastSensor.castRays(
+                            80 + planeWidth/2, plane.y + planeHeight/2, obstacles);
+                        RaycastSensor.drawRays(g2d, 80 + planeWidth/2, plane.y + planeHeight/2, rays);
+                    }
+                }
             }
-            g2d.drawImage(getNightFilteredImage(planeFrames[0]), 80, (int)planeY, null);
+        } else {
+            // Classic Mode: Draw single plane
+            BufferedImage planeFiltered = getNightFilteredImage(planeFrames[(frameCounter / 5) % 3]);
+            
+            if (!isLanding) {
+                g2d.drawImage(planeFiltered, 80, (int)planeY, null);
+                
+                // No raycasts in classic mode (neither AI nor manual)
+            } else {
+                if (platformX > -100) {
+                    g2d.drawImage(platformFiltered, 80, cachedLandingY + planeHeight, null);
+                }
+                g2d.drawImage(getNightFilteredImage(planeFrames[0]), 80, (int)planeY, null);
+            }
         }
         
         if (!isWorking) {
@@ -721,13 +818,31 @@ public class GamePanel extends JPanel {
 
         drawText(g2d, timeText, 15, 25);
         
-        String scoreText = String.format("%05d", score);
-        int scoreWidth = getTextWidth(scoreText);
-        drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
-        
-        String highScoreText = "HI " + String.format("%05d", highScore);
-        int hsWidth = getTextWidth(highScoreText);
-        drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
+        if (aiLearningMode && evolutionManager != null && isWorking) {
+            // ML Mode stats
+            String genText = "GEN " + evolutionManager.getGeneration();
+            drawText(g2d, genText, 15, 45);
+            
+            String aliveText = "ALIVE " + evolutionManager.getAliveCount();
+            drawText(g2d, aliveText, 15, 65);
+            
+            String bestText = "BEST " + String.format("%05d", (int)evolutionManager.getBestFitnessThisGen());
+            int bestWidth = getTextWidth(bestText);
+            drawText(g2d, bestText, 320 - bestWidth - 15, 25);
+            
+            String everText = "EVER " + String.format("%05d", (int)evolutionManager.getBestFitnessEver());
+            int everWidth = getTextWidth(everText);
+            drawText(g2d, everText, 320 - everWidth - 15, 45);
+        } else {
+            // Classic mode score
+            String scoreText = String.format("%05d", score);
+            int scoreWidth = getTextWidth(scoreText);
+            drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
+            
+            String highScoreText = "HI " + String.format("%05d", highScore);
+            int hsWidth = getTextWidth(highScoreText);
+            drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
+        }
         
         // Draw scrolling high score table during break
         if (!isWorking) {
@@ -739,6 +854,11 @@ public class GamePanel extends JPanel {
             if (highScoreScrollX + textWidth < 0) {
                 highScoreScrollX = 320;
             }
+        }
+        
+        // Draw learning graph in ML mode
+        if (aiLearningMode && evolutionManager != null && isWorking) {
+            drawLearningGraph(g2d);
         }
         
         // Draw intro message
@@ -812,8 +932,16 @@ public class GamePanel extends JPanel {
         showIntro = true;
         // Don't reset night mode - it persists across games
         
-        System.out.println("\n=== STARTING WORK PHASE ===");
-        System.out.println("Player: " + playerName);
+        // Initialize evolution manager for ML mode
+        if (aiLearningMode) {
+            evolutionManager = new EvolutionManager();
+            System.out.println("\n=== STARTING ML LEARNING MODE ===");
+            System.out.println("Generation 1 - Population: 10");
+        } else {
+            evolutionManager = null;
+            System.out.println("\n=== STARTING WORK PHASE ===");
+            System.out.println("Player: " + playerName);
+        }
         
         String[] colors = {"Blue", "Green", "Red", "Yellow"};
         String[] terrains = {"Grass", "Ice", "Snow"};
@@ -958,6 +1086,48 @@ public class GamePanel extends JPanel {
             if (!tooClose) return y;
         }
         return -1;
+    }
+    
+    private void drawLearningGraph(Graphics2D g2d) {
+        List<Double> history = evolutionManager.getFitnessHistory();
+        if (history.isEmpty()) return;
+        
+        int graphX = 10;
+        int graphY = 180;
+        int graphWidth = 100;
+        int graphHeight = 50;
+        
+        // Semi-transparent background
+        g2d.setColor(new Color(0, 0, 0, 150));
+        g2d.fillRect(graphX, graphY, graphWidth, graphHeight);
+        
+        // Border
+        g2d.setColor(new Color(255, 255, 255, 200));
+        g2d.drawRect(graphX, graphY, graphWidth, graphHeight);
+        
+        // Find max fitness for scaling
+        double maxFitness = history.stream().mapToDouble(d -> d).max().orElse(1.0);
+        if (maxFitness < 10) maxFitness = 10; // Minimum scale
+        
+        // Draw line graph
+        g2d.setColor(new Color(0, 255, 0, 255));
+        g2d.setStroke(new BasicStroke(1));
+        
+        for (int i = 1; i < history.size(); i++) {
+            double fitness1 = history.get(i - 1);
+            double fitness2 = history.get(i);
+            
+            int x1 = graphX + (int)((i - 1) * graphWidth / (double)Math.max(1, history.size() - 1));
+            int y1 = graphY + graphHeight - (int)(fitness1 / maxFitness * graphHeight);
+            
+            int x2 = graphX + (int)(i * graphWidth / (double)Math.max(1, history.size() - 1));
+            int y2 = graphY + graphHeight - (int)(fitness2 / maxFitness * graphHeight);
+            
+            g2d.drawLine(x1, y1, x2, y2);
+        }
+        
+        // Label
+        drawText(g2d, "FITNESS", graphX + 2, graphY - 5);
     }
     
     private void drawText(Graphics2D g2d, String text, int x, int y) {

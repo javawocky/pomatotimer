@@ -173,3 +173,141 @@ Created `GamePanelTest` class that:
 4. **Persistence**
    - Consider saving high score table to file (like current high score)
    - Load on startup if exists
+
+---
+
+## Evolutionary AI Learning System
+
+### Overview
+Replace the deterministic AI with a neural network-based system that learns through evolutionary algorithms. Multiple planes (population of 10) compete simultaneously, with the best performers breeding the next generation.
+
+### Phase 1: Raycast Sensor System
+
+#### 1.1 Implement Raycast Sensors
+- Add 6 raycasts from plane position:
+  - **Ray 0**: Straight ahead (0°) - 150 pixels
+  - **Ray 1**: 25° up - 150 pixels
+  - **Ray 2**: 25° down - 150 pixels
+  - **Ray 3**: 45° up - 150 pixels
+  - **Ray 4**: 45° down - 150 pixels
+  - **Ray 5**: Straight down (90°) - detects ground/bottom of screen
+- Each ray returns distance to collision (0.0 to 1.0, normalized by max distance)
+- Collision detection against:
+  - Top/bottom obstacles (mountains)
+  - Top of screen (y=0)
+  - Bottom of screen (y=240)
+
+#### 1.2 Visual Debug Display
+- Draw raycasts as lines from plane
+- **Green line**: No collision detected (full ray length)
+- **Red line**: Collision detected (stops at collision point)
+- Toggle visibility with existing debug controls
+- Only show rays for visible planes
+
+### Phase 2: Neural Network Architecture
+
+#### 2.1 Network Structure
+- **Input layer**: 7 neurons
+  - 6 raycast distances (normalized 0.0-1.0)
+  - 1 vertical velocity (normalized -1.0 to 1.0)
+- **Hidden layer**: 10 neurons (single hidden layer)
+  - Activation: tanh or sigmoid
+- **Output layer**: 1 neuron
+  - Activation: sigmoid (0.0-1.0)
+  - Threshold: >0.5 = jump, ≤0.5 = no jump
+- Total weights: (7×10) + (10×1) = 80 weights + 11 biases = 91 parameters
+
+#### 2.2 Implementation Options
+- **Option A**: Code from scratch (simple feedforward network, ~100 lines)
+- **Option B**: Use lightweight Java library (Neuroph, DeepNets, or similar)
+- Decision: Choose based on simplicity and JAR size impact
+
+#### 2.3 Jump Debouncing
+- Implement same debouncing as player input
+- Minimum 10-15 frames between jumps
+- Prevents unnatural rapid jumping
+
+### Phase 3: Evolutionary Algorithm
+
+#### 3.1 Population Management
+- **Population size**: 10 planes
+- Each plane gets unique color from available plane sprites
+- Each plane has its own neural network (randomly initialized weights)
+- All planes start at same position when generation begins
+
+#### 3.2 Fitness Function
+- **Score component**: Points earned (obstacles passed × 10)
+- **Survival component**: Frames survived
+- **Formula**: `fitness = score + (survivalTime / 10)`
+- Higher fitness = better performance
+
+#### 3.3 Generation Lifecycle
+1. All 10 planes fly simultaneously
+2. Plane crashes when:
+   - Hits obstacle
+   - Hits top/bottom of screen
+   - Falls off screen
+3. Generation ends when all planes crash OR work timer ends
+4. Rank planes by fitness
+5. Breed next generation
+
+#### 3.4 Selection & Breeding
+- **Selection**: Top 3 planes become parents
+- **Breeding strategy**:
+  - Best plane (rank 1): Clone directly (elitism) → 1 offspring
+  - Ranks 1-3: Crossover pairs → 6 offspring
+    - Parent1 + Parent2 → 2 children
+    - Parent1 + Parent3 → 2 children
+    - Parent2 + Parent3 → 2 children
+  - Random mutations: 3 offspring from random parents
+- **Crossover**: Uniform crossover (50% chance per weight from each parent)
+- **Mutation rate**: 15% chance per weight
+- **Mutation amount**: Add random value from Gaussian distribution (mean=0, stddev=0.3)
+
+### Phase 4: UI Integration
+
+#### 4.1 Mode Toggle
+- Press **'A'** key to toggle between AI modes:
+  - **Default**: Evolutionary AI (10 planes) - ML learning mode
+  - **Classic**: Original deterministic AI (single plane)
+- Mode persists during work session, resets to ML mode on new work session
+
+#### 4.2 Visual Display
+- Show all 10 planes simultaneously
+- Each plane renders with different color
+- Show raycasts for all planes (can be toggled off for performance)
+- Display generation stats overlay:
+  - Current generation number
+  - Planes alive / total
+  - Best fitness this generation
+  - Best fitness all time
+
+#### 4.3 State Management
+- Neural networks and fitness scores kept in memory only
+- No persistence between app restarts
+- Reset to generation 1 when starting new work session
+
+### Phase 5: Testing & Tuning
+
+#### 5.1 Verify Raycast Accuracy
+- Visual inspection: rays turn red when near obstacles
+- Test edge cases: corners, screen boundaries
+
+#### 5.2 Monitor Learning Progress
+- Generation 1: Random flailing, most crash immediately
+- Generation 5-10: Some planes learn to jump
+- Generation 20+: Consistent obstacle navigation
+- If no improvement after 20 generations: adjust mutation rate or network architecture
+
+#### 5.3 Performance Optimization
+- Ensure 60 FPS with 10 planes + raycasts
+- Consider disabling raycast rendering after debugging
+- Profile neural network forward pass performance
+
+### Implementation Order
+1. Raycast system + visual debug (Phase 1)
+2. Neural network implementation (Phase 2)
+3. Single plane with NN (test before population)
+4. Population + evolutionary algorithm (Phase 3)
+5. UI toggle and stats display (Phase 4)
+6. Testing and tuning (Phase 5)
