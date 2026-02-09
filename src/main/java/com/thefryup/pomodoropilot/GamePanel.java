@@ -1098,11 +1098,11 @@ public class GamePanel extends JPanel {
         int graphHeight = 50;
         
         // Semi-transparent background
-        g2d.setColor(new Color(0, 0, 0, 150));
+        g2d.setColor(new Color(0, 0, 0, 60));
         g2d.fillRect(graphX, graphY, graphWidth, graphHeight);
         
         // Border
-        g2d.setColor(new Color(255, 255, 255, 200));
+        g2d.setColor(new Color(255, 255, 255, 100));
         g2d.drawRect(graphX, graphY, graphWidth, graphHeight);
         
         // Find max fitness for scaling
@@ -1110,7 +1110,7 @@ public class GamePanel extends JPanel {
         if (maxFitness < 10) maxFitness = 10; // Minimum scale
         
         // Draw line graph
-        g2d.setColor(new Color(0, 255, 0, 255));
+        g2d.setColor(new Color(0, 255, 0, 180));
         g2d.setStroke(new BasicStroke(1));
         
         for (int i = 1; i < history.size(); i++) {
