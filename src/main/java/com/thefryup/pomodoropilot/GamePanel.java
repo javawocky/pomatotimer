@@ -479,14 +479,18 @@ public class GamePanel extends JPanel {
                 if (!obs.scored && obs.x + PIPE_WIDTH < 80) {
                     obs.scored = true;
                     if (aiLearningMode && evolutionManager != null) {
-                        // Score all alive planes
+                        // Score only alive planes - each plane gets points individually when they pass
+                        int alivePlanes = 0;
                         for (AIPlane plane : evolutionManager.getPopulation()) {
                             if (plane.alive) {
                                 plane.score += 10;
+                                alivePlanes++;
                             }
                         }
+                        System.out.println("Obstacle passed! " + alivePlanes + " alive planes each got +10 points");
                     } else {
                         score += 10;
+                        System.out.println("Player passed obstacle! Score now: " + score);
                         if (score > highScore) {
                             highScore = score;
                             saveHighScore();
@@ -767,14 +771,15 @@ public class GamePanel extends JPanel {
                 if (plane.alive) {
                     BufferedImage[] frames = colorFrames[plane.colorIndex];
                     BufferedImage planeImg = getNightFilteredImage(frames[(frameCounter / 5) % 3]);
-                    g2d.drawImage(planeImg, 80, (int)plane.y, null);
                     
-                    // Draw raycasts for this plane
+                    // Draw raycasts behind the plane
                     if (showRaycasts) {
                         RaycastSensor.RayResult[] rays = RaycastSensor.castRays(
                             80 + planeWidth/2, plane.y + planeHeight/2, obstacles);
                         RaycastSensor.drawRays(g2d, 80 + planeWidth/2, plane.y + planeHeight/2, rays);
                     }
+                    
+                    g2d.drawImage(planeImg, 80, (int)plane.y, null);
                 }
             }
         } else {
@@ -826,13 +831,15 @@ public class GamePanel extends JPanel {
             String aliveText = "ALIVE " + evolutionManager.getAliveCount();
             drawText(g2d, aliveText, 15, 65);
             
-            String bestText = "BEST " + String.format("%05d", (int)evolutionManager.getBestFitnessThisGen());
-            int bestWidth = getTextWidth(bestText);
-            drawText(g2d, bestText, 320 - bestWidth - 15, 25);
+            // Show best score this generation (right side)
+            String scoreText = String.format("%05d", evolutionManager.getBestScoreThisGen());
+            int scoreWidth = getTextWidth(scoreText);
+            drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
             
-            String everText = "EVER " + String.format("%05d", (int)evolutionManager.getBestFitnessEver());
-            int everWidth = getTextWidth(everText);
-            drawText(g2d, everText, 320 - everWidth - 15, 45);
+            // Show all-time high score (center)
+            String highScoreText = "HI " + String.format("%05d", evolutionManager.getBestScoreEver());
+            int hsWidth = getTextWidth(highScoreText);
+            drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
         } else {
             // Classic mode score
             String scoreText = String.format("%05d", score);
@@ -932,11 +939,16 @@ public class GamePanel extends JPanel {
         showIntro = true;
         // Don't reset night mode - it persists across games
         
-        // Initialize evolution manager for ML mode
+        // Initialize evolution manager for ML mode (only if not already created)
         if (aiLearningMode) {
-            evolutionManager = new EvolutionManager();
-            System.out.println("\n=== STARTING ML LEARNING MODE ===");
-            System.out.println("Generation 1 - Population: 10");
+            if (evolutionManager == null) {
+                evolutionManager = new EvolutionManager();
+                System.out.println("\n=== STARTING ML LEARNING MODE ===");
+                System.out.println("Generation 1 - Population: 10");
+            } else {
+                System.out.println("\n=== RESUMING ML LEARNING MODE ===");
+                System.out.println("Generation " + evolutionManager.getGeneration() + " - Population: 10");
+            }
         } else {
             evolutionManager = null;
             System.out.println("\n=== STARTING WORK PHASE ===");
@@ -1125,9 +1137,6 @@ public class GamePanel extends JPanel {
             
             g2d.drawLine(x1, y1, x2, y2);
         }
-        
-        // Label
-        drawText(g2d, "FITNESS", graphX + 2, graphY - 5);
     }
     
     private void drawText(Graphics2D g2d, String text, int x, int y) {

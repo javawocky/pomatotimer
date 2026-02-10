@@ -22,14 +22,14 @@ public class RaycastSensor {
     }
     
     public static RayResult[] castRays(double planeX, double planeY, ArrayList<GamePanel.Obstacle> obstacles) {
-        RayResult[] results = new RayResult[6];
+        RayResult[] results = new RayResult[7];
         
         // Ray angles in degrees
-        double[] angles = {0, -25, 25, -45, 45, 90};
-        // Ray 5 (straight down) is shorter
-        int[] rayLengths = {RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH / 3};
+        double[] angles = {0, -25, 25, -45, 45, 90, -90};
+        // Ray 5 (straight down) and Ray 6 (straight up) are shorter
+        int[] rayLengths = {RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH / 3, RAY_LENGTH / 3};
         
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 7; i++) {
             results[i] = castRay(planeX, planeY, angles[i], obstacles, rayLengths[i]);
         }
         
@@ -49,8 +49,23 @@ public class RaycastSensor {
             double x = startX + dx * dist;
             double y = startY + dy * dist;
             
-            // Check screen boundaries (ignore top boundary)
-            if (y >= 240 || x < 0 || x >= 320) {
+            // Check screen boundaries
+            // Upward rays (negative angles) ignore top boundary, except straight up (-90)
+            // Only downward ray (90 degrees) detects bottom boundary
+            // All rays detect side boundaries
+            boolean hitBoundary = false;
+            
+            if (x < 0 || x >= 320) {
+                hitBoundary = true; // Side boundaries
+            } else if (angleDegrees >= 0 && y < 0) {
+                hitBoundary = true; // Top boundary (only for non-upward rays)
+            } else if (angleDegrees == -90 && y < 0) {
+                hitBoundary = true; // Top boundary (for straight up ray)
+            } else if (angleDegrees == 90 && y >= 240) {
+                hitBoundary = true; // Bottom boundary (only for downward ray)
+            }
+            
+            if (hitBoundary) {
                 minDistance = Math.min(minDistance, dist);
                 hit = true;
                 break;
@@ -113,14 +128,18 @@ public class RaycastSensor {
         for (int i = 0; i < rays.length; i++) {
             RayResult ray = rays[i];
             
+            // Only draw rays that hit something
             if (ray.hit) {
-                g2d.setColor(new Color(255, 0, 0, 180)); // Red with transparency
-            } else {
-                g2d.setColor(new Color(0, 255, 0, 180)); // Green with transparency
+                // Color based on distance: green (far) to red (close)
+                // distance is 0.0 (close) to 1.0 (far)
+                float distance = (float)ray.distance;
+                int red = (int)(255 * (1.0f - distance));   // More red when close
+                int green = (int)(255 * distance);          // More green when far
+                
+                g2d.setColor(new Color(red, green, 0, 180));
+                g2d.setStroke(new BasicStroke(1));
+                g2d.drawLine((int)planeX, (int)planeY, (int)ray.endX, (int)ray.endY);
             }
-            
-            g2d.setStroke(new BasicStroke(1));
-            g2d.drawLine((int)planeX, (int)planeY, (int)ray.endX, (int)ray.endY);
         }
     }
 }

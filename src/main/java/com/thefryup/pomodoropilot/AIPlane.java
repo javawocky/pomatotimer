@@ -9,6 +9,7 @@ public class AIPlane {
     public NeuralNetwork brain;
     public int colorIndex; // 0=Blue, 1=Red, 2=Green, 3=Yellow
     public int jumpCooldown;
+    public double collisionPenalty; // Separate penalty for fitness calculation
     
     private static final double GRAVITY = 0.5;
     private static final double JUMP_STRENGTH = -4.5;
@@ -23,6 +24,7 @@ public class AIPlane {
         this.brain = new NeuralNetwork();
         this.colorIndex = colorIndex;
         this.jumpCooldown = 0;
+        this.collisionPenalty = 0;
     }
     
     public AIPlane(int colorIndex, NeuralNetwork brain) {
@@ -34,6 +36,7 @@ public class AIPlane {
         this.brain = brain;
         this.colorIndex = colorIndex;
         this.jumpCooldown = 0;
+        this.collisionPenalty = 0;
     }
     
     public void update(RaycastSensor.RayResult[] rays, int planeHeight) {
@@ -87,6 +90,12 @@ public class AIPlane {
                     obs.x + PIPE_WIDTH/2.0, topPipeHeight,
                     obs.x, 0,
                     obs.x + PIPE_WIDTH, 0)) {
+                
+                // Position-based penalty for top obstacle
+                // Closer to base (y=0) = worse penalty
+                double collisionDepth = y / topPipeHeight; // 0.0 = at base, 1.0 = at tip
+                collisionPenalty = (1.0 - collisionDepth) * 50; // 0-50 point penalty
+                
                 alive = false;
             }
             
@@ -96,6 +105,12 @@ public class AIPlane {
                     obs.x + PIPE_WIDTH/2.0, bottomPipeY,
                     obs.x, 240,
                     obs.x + PIPE_WIDTH, 240)) {
+                
+                // Position-based penalty for bottom obstacle
+                // Closer to base (y=240) = worse penalty
+                double collisionDepth = (240 - y) / (240 - bottomPipeY); // 0.0 = at base, 1.0 = at tip
+                collisionPenalty = (1.0 - collisionDepth) * 50; // 0-50 point penalty
+                
                 alive = false;
             }
         }
@@ -134,6 +149,8 @@ public class AIPlane {
     }
     
     public double getFitness() {
-        return score + (survivalTime / 10.0);
+        // Score only increases when passing obstacles (10 points each)
+        // Apply collision penalty and survival bonus in fitness calculation only
+        return score + (survivalTime * 0.1) - collisionPenalty;
     }
 }

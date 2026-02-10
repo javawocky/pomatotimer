@@ -41,6 +41,27 @@ public class EvolutionManager {
         return (int) population.stream().filter(p -> p.alive).count();
     }
     
+    private int bestScoreEver = 0;
+    
+    public void updateBestScoreEver() {
+        int currentBest = getBestScoreThisGen();
+        if (currentBest > bestScoreEver) {
+            bestScoreEver = currentBest;
+        }
+    }
+    
+    public int getBestScoreThisGen() {
+        int bestScore = population.stream()
+            .mapToInt(p -> p.score)
+            .max()
+            .orElse(0);
+        return bestScore;
+    }
+    
+    public int getBestScoreEver() {
+        return bestScoreEver;
+    }
+    
     public double getBestFitnessThisGen() {
         return population.stream()
             .mapToDouble(AIPlane::getFitness)
@@ -70,6 +91,9 @@ public class EvolutionManager {
             bestFitnessEver = bestThisGen;
         }
         
+        // Update best score ever before creating new generation
+        updateBestScoreEver();
+        
         // Add to history
         fitnessHistory.add(bestThisGen);
         if (fitnessHistory.size() > MAX_HISTORY) {
@@ -81,37 +105,74 @@ public class EvolutionManager {
         // Create next generation
         List<AIPlane> nextGen = new ArrayList<>();
         
-        // 1. Elite: Clone best plane
-        nextGen.add(new AIPlane(0, population.get(0).brain.clone()));
+        // Early generations: more diversity, less champion copying
+        // Later generations: more champion copying as quality improves
+        boolean earlyGeneration = generation < 20;
+        double bestFitness = population.get(0).getFitness();
+        boolean lowQualityChampion = bestFitness < 50; // Champion hasn't passed many obstacles
         
-        // 2. Crossover: Top 3 parents breed
-        NeuralNetwork parent1 = population.get(0).brain;
-        NeuralNetwork parent2 = population.get(1).brain;
-        NeuralNetwork parent3 = population.get(2).brain;
-        
-        // Parent 1 + 2 -> 2 children
-        nextGen.add(new AIPlane(1, NeuralNetwork.crossover(parent1, parent2, rand)));
-        nextGen.add(new AIPlane(2, NeuralNetwork.crossover(parent1, parent2, rand)));
-        
-        // Parent 1 + 3 -> 2 children
-        nextGen.add(new AIPlane(3, NeuralNetwork.crossover(parent1, parent3, rand)));
-        nextGen.add(new AIPlane(0, NeuralNetwork.crossover(parent1, parent3, rand)));
-        
-        // Parent 2 + 3 -> 2 children
-        nextGen.add(new AIPlane(1, NeuralNetwork.crossover(parent2, parent3, rand)));
-        nextGen.add(new AIPlane(2, NeuralNetwork.crossover(parent2, parent3, rand)));
-        
-        // 3. Random mutations: 3 offspring
-        for (int i = 0; i < 3; i++) {
-            int parentIdx = rand.nextInt(3);
-            NeuralNetwork brain = population.get(parentIdx).brain.clone();
-            brain.mutate(MUTATION_RATE * 2, rand); // Higher mutation for diversity
+        if (earlyGeneration || lowQualityChampion) {
+            // Early/low-quality: Keep only 1 elite, more diversity
+            nextGen.add(new AIPlane(0, population.get(0).brain.clone()));
+            
+            // More crossover diversity from top 7
+            for (int i = 0; i < 7; i++) {
+                int parent1Idx = rand.nextInt(7);
+                int parent2Idx = rand.nextInt(7);
+                while (parent2Idx == parent1Idx) {
+                    parent2Idx = rand.nextInt(7);
+                }
+                
+                NeuralNetwork child = NeuralNetwork.crossover(
+                    population.get(parent1Idx).brain, 
+                    population.get(parent2Idx).brain, 
+                    rand
+                );
+                child.mutate(MUTATION_RATE * 0.8, rand); // Moderate mutation
+                nextGen.add(new AIPlane(i % 4, child));
+            }
+            
+            // Random mutations for exploration
+            for (int i = 0; i < 2; i++) {
+                int parentIdx = rand.nextInt(8);
+                NeuralNetwork brain = population.get(parentIdx).brain.clone();
+                brain.mutate(MUTATION_RATE * 1.5, rand);
+                nextGen.add(new AIPlane(i % 4, brain));
+            }
+        } else {
+            // Later/high-quality: More champion copying
+            nextGen.add(new AIPlane(0, population.get(0).brain.clone()));
+            nextGen.add(new AIPlane(1, population.get(1).brain.clone()));
+            nextGen.add(new AIPlane(2, population.get(2).brain.clone()));
+            
+            // Champion clones with light mutation
+            for (int i = 0; i < 3; i++) {
+                NeuralNetwork brain = population.get(0).brain.clone();
+                brain.mutate(MUTATION_RATE * 0.3, rand); // Very light mutation
+                nextGen.add(new AIPlane(i % 4, brain));
+            }
+            
+            // Crossover from top 5
+            for (int i = 0; i < 3; i++) {
+                int parent1Idx = rand.nextInt(5);
+                int parent2Idx = rand.nextInt(5);
+                while (parent2Idx == parent1Idx) {
+                    parent2Idx = rand.nextInt(5);
+                }
+                
+                NeuralNetwork child = NeuralNetwork.crossover(
+                    population.get(parent1Idx).brain, 
+                    population.get(parent2Idx).brain, 
+                    rand
+                );
+                child.mutate(MUTATION_RATE * 0.5, rand);
+                nextGen.add(new AIPlane(i % 4, child));
+            }
+            
+            // One explorer
+            NeuralNetwork brain = population.get(0).brain.clone();
+            brain.mutate(MUTATION_RATE * 2.0, rand);
             nextGen.add(new AIPlane(3, brain));
-        }
-        
-        // Apply small mutations to all except elite
-        for (int i = 1; i < nextGen.size(); i++) {
-            nextGen.get(i).brain.mutate(MUTATION_RATE, rand);
         }
         
         // Assign colors
