@@ -22,14 +22,14 @@ public class RaycastSensor {
     }
     
     public static RayResult[] castRays(double planeX, double planeY, ArrayList<GamePanel.Obstacle> obstacles) {
-        RayResult[] results = new RayResult[7];
+        RayResult[] results = new RayResult[9];
         
-        // Ray angles in degrees
-        double[] angles = {0, -25, 25, -45, 45, 90, -90};
-        // Ray 5 (straight down) and Ray 6 (straight up) are shorter
-        int[] rayLengths = {RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH / 3, RAY_LENGTH / 3};
+        // Ray angles in degrees - evenly spread forward
+        double[] angles = {0, -15, 15, -30, 30, -45, 45, 90, -90};
+        // Rays 7-8 (straight down, straight up) are shorter
+        int[] rayLengths = {RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH / 3, RAY_LENGTH / 3};
         
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 9; i++) {
             results[i] = castRay(planeX, planeY, angles[i], obstacles, rayLengths[i]);
         }
         

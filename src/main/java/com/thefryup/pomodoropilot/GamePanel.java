@@ -37,6 +37,9 @@ public class GamePanel extends JPanel {
     private int cachedLandingY = 0;
     private boolean renderBackground = true;
     private boolean turboMode = false;
+    private boolean fastForwardMode = false;
+    private int fastForwardStartGen = 0;
+    private boolean wasTurboMode = false;
     
     private ArrayList<BackgroundPlane> backgroundPlanes = new ArrayList<>();
     private ArrayList<Obstacle> obstacles = new ArrayList<>();
@@ -145,6 +148,13 @@ public class GamePanel extends JPanel {
                     if (isWorking) {
                         startWork(); // Restart to apply mode change
                     }
+                } else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
+                    if (aiLearningMode && evolutionManager != null && !fastForwardMode) {
+                        fastForwardMode = true;
+                        wasTurboMode = turboMode;
+                        fastForwardStartGen = evolutionManager.getGeneration();
+                        System.out.println("Fast-forward: +50 generations from gen " + fastForwardStartGen);
+                    }
                 } else if (e.getKeyCode() == KeyEvent.VK_SPACE) {
                     if (isWorking && !isGameOver && !spacePressed && !landingSequenceActive && planeY > 15) {
                         isManualControl = true;
@@ -167,14 +177,30 @@ public class GamePanel extends JPanel {
             while (true) {
                 // Run multiple updates per frame when in fast forward
                 for (int i = 0; i < speedMultiplier; i++) {
-                    SwingUtilities.invokeLater(() -> {
+                    if (fastForwardMode) {
+                        // Direct update during fast-forward to avoid event queue overflow
                         update();
+                    } else {
+                        SwingUtilities.invokeLater(() -> {
+                            update();
+                            repaint();
+                            Toolkit.getDefaultToolkit().sync();
+                        });
+                    }
+                }
+                
+                // Repaint once per loop during fast-forward
+                if (fastForwardMode) {
+                    SwingUtilities.invokeLater(() -> {
                         repaint();
                         Toolkit.getDefaultToolkit().sync();
                     });
                 }
+                
                 try {
-                    if (!turboMode) {
+                    if (fastForwardMode) {
+                        Thread.yield(); // Give other threads a chance
+                    } else if (!turboMode) {
                         Thread.sleep(33);
                     } else {
                         Thread.sleep(1); // Very short sleep in turbo mode
@@ -503,19 +529,33 @@ public class GamePanel extends JPanel {
             
             // Find next obstacle for target calculation
             Obstacle nextObstacle = null;
+            Obstacle secondObstacle = null;
+            boolean foundFirst = false;
             for (Obstacle obs : obstacles) {
                 if (obs.x + PIPE_WIDTH > planeX) {
-                    nextObstacle = obs;
-                    break;
+                    if (!foundFirst) {
+                        nextObstacle = obs;
+                        foundFirst = true;
+                    } else {
+                        secondObstacle = obs;
+                        break;
+                    }
                 }
             }
             
             double targetY = 120; // Default center
             double targetDistance = 0;
+            double target2Y = 120;
+            double target2Distance = 0;
             if (nextObstacle != null) {
                 targetY = nextObstacle.gapY; // Center of gap
                 targetDistance = Math.sqrt(Math.pow(nextObstacle.x + PIPE_WIDTH/2 - planeX, 2) + 
                                          Math.pow(targetY - 120, 2));
+            }
+            if (secondObstacle != null) {
+                target2Y = secondObstacle.gapY;
+                target2Distance = Math.sqrt(Math.pow(secondObstacle.x + PIPE_WIDTH/2 - planeX, 2) + 
+                                         Math.pow(target2Y - 120, 2));
             }
             
             // ML Learning Mode
@@ -525,7 +565,7 @@ public class GamePanel extends JPanel {
                     if (plane.alive) {
                         RaycastSensor.RayResult[] rays = RaycastSensor.castRays(
                             planeX + planeWidth/2, plane.y + planeHeight/2, obstacles);
-                        plane.update(rays, planeHeight, targetY, targetDistance);
+                        plane.update(rays, planeHeight, targetY, targetDistance, target2Y, target2Distance);
                         
                         // Check collisions
                         for (Obstacle obs : obstacles) {
@@ -543,7 +583,24 @@ public class GamePanel extends JPanel {
                 
                 // Check if generation is complete
                 if (evolutionManager.allDead()) {
+                    int oldGen = evolutionManager.getGeneration();
                     evolutionManager.evolveNextGeneration();
+                    int newGen = evolutionManager.getGeneration();
+                    
+                    // Check if fast-forward is complete
+                    if (fastForwardMode) {
+                        int progress = newGen - fastForwardStartGen;
+                        System.out.println("Gen " + newGen + " [FF: " + progress + "/50, start=" + fastForwardStartGen + "]");
+                        
+                        if (progress >= 50) {
+                            fastForwardMode = false;
+                            turboMode = wasTurboMode;
+                            System.out.println(">>> Fast-forward COMPLETE! <<<");
+                        }
+                    } else {
+                        System.out.println("Gen " + newGen);
+                    }
+                    
                     // Reset game state for new generation
                     obstacles.clear();
                     frameCounter = 0;
@@ -803,12 +860,19 @@ public class GamePanel extends JPanel {
             AIPlane firstPlane = evolutionManager.getPopulation().stream()
                 .filter(p -> p.alive).findFirst().orElse(null);
             if (firstPlane != null) {
-                // Find next obstacle
+                // Find next two obstacles
                 Obstacle nextObs = null;
+                Obstacle secondObs = null;
+                boolean foundFirst = false;
                 for (Obstacle obs : obstacles) {
                     if (obs.x + PIPE_WIDTH > 80) {
-                        nextObs = obs;
-                        break;
+                        if (!foundFirst) {
+                            nextObs = obs;
+                            foundFirst = true;
+                        } else {
+                            secondObs = obs;
+                            break;
+                        }
                     }
                 }
                 
@@ -827,6 +891,17 @@ public class GamePanel extends JPanel {
                     g2d.setStroke(new BasicStroke(1));
                     g2d.drawLine(80 + planeWidth/2, (int)firstPlane.y + planeHeight/2, 
                                targetX, targetY);
+                }
+                
+                // Draw second target in red
+                if (secondObs != null) {
+                    int target2X = secondObs.x + PIPE_WIDTH/2;
+                    int target2Y = secondObs.gapY;
+                    
+                    g2d.setColor(Color.RED);
+                    g2d.setStroke(new BasicStroke(2));
+                    g2d.drawLine(target2X - 5, target2Y, target2X + 5, target2Y);
+                    g2d.drawLine(target2X, target2Y - 5, target2X, target2Y + 5);
                 }
             }
         } else {

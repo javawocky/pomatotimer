@@ -11,6 +11,8 @@ public class AIPlane {
     public int jumpCooldown;
     public double targetY = 120; // Target Y position (gap center)
     public double targetDistance = 0; // Distance to target
+    public double target2Y = 120; // Second target Y position
+    public double target2Distance = 0; // Distance to second target
     
     private static final double GRAVITY = 0.5;
     private static final double JUMP_STRENGTH = -4.5;
@@ -38,26 +40,35 @@ public class AIPlane {
         this.jumpCooldown = 0;
     }
     
-    public void update(RaycastSensor.RayResult[] rays, int planeHeight, double targetY, double targetDistance) {
+    public void update(RaycastSensor.RayResult[] rays, int planeHeight, double targetY, double targetDistance, double target2Y, double target2Distance) {
         if (!alive) return;
         
         this.targetY = targetY;
         this.targetDistance = targetDistance;
+        this.target2Y = target2Y;
+        this.target2Distance = target2Distance;
         
         survivalTime++;
         
-        // Prepare inputs for neural network (7 raycasts + 2 target inputs)
-        double[] inputs = new double[9];
-        for (int i = 0; i < 7; i++) {
+        // Prepare inputs for neural network (9 raycasts + 4 target inputs)
+        double[] inputs = new double[13];
+        for (int i = 0; i < 9; i++) {
             inputs[i] = rays[i].distance;
         }
         
         // Target height relative to plane (-1 to 1, negative = below target)
         double heightDiff = (targetY - y) / 120.0; // Normalize to screen height
-        inputs[7] = Math.max(-1.0, Math.min(1.0, heightDiff));
+        inputs[9] = Math.max(-1.0, Math.min(1.0, heightDiff));
         
         // Distance to target (0 to 1, closer = higher value)
-        inputs[8] = Math.max(0.0, Math.min(1.0, 1.0 - (targetDistance / 320.0)));
+        inputs[10] = Math.max(0.0, Math.min(1.0, 1.0 - (targetDistance / 320.0)));
+        
+        // Second target height relative to plane
+        double heightDiff2 = (target2Y - y) / 120.0;
+        inputs[11] = Math.max(-1.0, Math.min(1.0, heightDiff2));
+        
+        // Distance to second target
+        inputs[12] = Math.max(0.0, Math.min(1.0, 1.0 - (target2Distance / 320.0)));
         
         // Get decision from neural network
         double output = brain.predict(inputs);

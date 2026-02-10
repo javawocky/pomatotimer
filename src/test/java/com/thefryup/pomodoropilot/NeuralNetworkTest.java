@@ -15,7 +15,7 @@ public class NeuralNetworkTest {
     @Test
     public void testPredictReturnsValidOutput() {
         NeuralNetwork nn = new NeuralNetwork();
-        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0};
+        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5};
         
         double output = nn.predict(inputs);
         
@@ -26,8 +26,8 @@ public class NeuralNetworkTest {
     public void testPredictWithDifferentInputs() {
         NeuralNetwork nn = new NeuralNetwork();
         
-        double[] inputs1 = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
-        double[] inputs2 = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+        double[] inputs1 = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+        double[] inputs2 = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
         
         double output1 = nn.predict(inputs1);
         double output2 = nn.predict(inputs2);
@@ -39,7 +39,7 @@ public class NeuralNetworkTest {
     @Test
     public void testPredictWithWrongInputSize() {
         NeuralNetwork nn = new NeuralNetwork();
-        double[] inputs = {0.5, 0.5, 0.5}; // Only 3 inputs instead of 7
+        double[] inputs = {0.5, 0.5, 0.5}; // Only 3 inputs instead of 13
         
         assertThrows(IllegalArgumentException.class, () -> nn.predict(inputs));
     }
@@ -53,7 +53,7 @@ public class NeuralNetworkTest {
         assertNotSame(original, clone, "Clone should be different object");
         
         // Same inputs should produce same outputs
-        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0};
+        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5};
         double output1 = original.predict(inputs);
         double output2 = clone.predict(inputs);
         
@@ -65,7 +65,7 @@ public class NeuralNetworkTest {
         NeuralNetwork original = new NeuralNetwork();
         NeuralNetwork mutated = original.clone();
         
-        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0};
+        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5};
         double outputBefore = mutated.predict(inputs);
         
         // Mutate with 100% rate to ensure changes
@@ -81,7 +81,7 @@ public class NeuralNetworkTest {
         NeuralNetwork original = new NeuralNetwork();
         NeuralNetwork mutated = original.clone();
         
-        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0};
+        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5};
         double outputBefore = mutated.predict(inputs);
         
         // Mutate with 0% rate - should not change
@@ -102,7 +102,7 @@ public class NeuralNetworkTest {
         assertNotNull(child);
         
         // Child should produce valid output
-        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0};
+        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5};
         double output = child.predict(inputs);
         
         assertTrue(output >= 0.0 && output <= 1.0, "Child output should be valid");
@@ -116,7 +116,7 @@ public class NeuralNetworkTest {
         NeuralNetwork child1 = NeuralNetwork.crossover(parent1, parent2, new Random(42));
         NeuralNetwork child2 = NeuralNetwork.crossover(parent1, parent2, new Random(123));
         
-        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0};
+        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5};
         double output1 = child1.predict(inputs);
         double output2 = child2.predict(inputs);
         
@@ -128,7 +128,7 @@ public class NeuralNetworkTest {
     public void testDeterministicBehavior() {
         NeuralNetwork nn = new NeuralNetwork();
         
-        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0};
+        double[] inputs = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5};
         
         double output1 = nn.predict(inputs);
         double output2 = nn.predict(inputs);
@@ -143,17 +143,17 @@ public class NeuralNetworkTest {
         NeuralNetwork nn = new NeuralNetwork();
         
         // Test with all max values
-        double[] maxInputs = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+        double[] maxInputs = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
         double maxOutput = nn.predict(maxInputs);
         assertTrue(maxOutput >= 0.0 && maxOutput <= 1.0, "Max input output should be in range");
         
         // Test with all min values
-        double[] minInputs = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0};
+        double[] minInputs = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, -1.0, 0.0};
         double minOutput = nn.predict(minInputs);
         assertTrue(minOutput >= 0.0 && minOutput <= 1.0, "Min input output should be in range");
         
         // Test with mixed extreme values
-        double[] mixedInputs = {1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.5};
+        double[] mixedInputs = {1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.5, 0.5, 0.5, 0.5};
         double mixedOutput = nn.predict(mixedInputs);
         assertTrue(mixedOutput >= 0.0 && mixedOutput <= 1.0, "Mixed input output should be in range");
     }
