@@ -9,6 +9,8 @@ public class AIPlane {
     public NeuralNetwork brain;
     public int colorIndex; // 0=Blue, 1=Red, 2=Green, 3=Yellow
     public int jumpCooldown;
+    public double targetY = 120; // Target Y position (gap center)
+    public double targetDistance = 0; // Distance to target
     
     private static final double GRAVITY = 0.5;
     private static final double JUMP_STRENGTH = -4.5;
@@ -36,17 +38,26 @@ public class AIPlane {
         this.jumpCooldown = 0;
     }
     
-    public void update(RaycastSensor.RayResult[] rays, int planeHeight) {
+    public void update(RaycastSensor.RayResult[] rays, int planeHeight, double targetY, double targetDistance) {
         if (!alive) return;
+        
+        this.targetY = targetY;
+        this.targetDistance = targetDistance;
         
         survivalTime++;
         
-        // Prepare inputs for neural network
-        double[] inputs = new double[7];
-        for (int i = 0; i < 6; i++) {
+        // Prepare inputs for neural network (7 raycasts + 2 target inputs)
+        double[] inputs = new double[9];
+        for (int i = 0; i < 7; i++) {
             inputs[i] = rays[i].distance;
         }
-        inputs[6] = Math.max(-1.0, Math.min(1.0, velY / 10.0)); // Normalize velocity
+        
+        // Target height relative to plane (-1 to 1, negative = below target)
+        double heightDiff = (targetY - y) / 120.0; // Normalize to screen height
+        inputs[7] = Math.max(-1.0, Math.min(1.0, heightDiff));
+        
+        // Distance to target (0 to 1, closer = higher value)
+        inputs[8] = Math.max(0.0, Math.min(1.0, 1.0 - (targetDistance / 320.0)));
         
         // Get decision from neural network
         double output = brain.predict(inputs);

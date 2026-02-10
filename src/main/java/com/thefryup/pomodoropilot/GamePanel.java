@@ -501,6 +501,23 @@ public class GamePanel extends JPanel {
 
             int planeX = 80;
             
+            // Find next obstacle for target calculation
+            Obstacle nextObstacle = null;
+            for (Obstacle obs : obstacles) {
+                if (obs.x + PIPE_WIDTH > planeX) {
+                    nextObstacle = obs;
+                    break;
+                }
+            }
+            
+            double targetY = 120; // Default center
+            double targetDistance = 0;
+            if (nextObstacle != null) {
+                targetY = nextObstacle.gapY; // Center of gap
+                targetDistance = Math.sqrt(Math.pow(nextObstacle.x + PIPE_WIDTH/2 - planeX, 2) + 
+                                         Math.pow(targetY - 120, 2));
+            }
+            
             // ML Learning Mode
             if (aiLearningMode && evolutionManager != null) {
                 // Update all AI planes
@@ -508,7 +525,7 @@ public class GamePanel extends JPanel {
                     if (plane.alive) {
                         RaycastSensor.RayResult[] rays = RaycastSensor.castRays(
                             planeX + planeWidth/2, plane.y + planeHeight/2, obstacles);
-                        plane.update(rays, planeHeight);
+                        plane.update(rays, planeHeight, targetY, targetDistance);
                         
                         // Check collisions
                         for (Obstacle obs : obstacles) {
@@ -779,6 +796,37 @@ public class GamePanel extends JPanel {
                     }
                     
                     g2d.drawImage(planeImg, 80, (int)plane.y, null);
+                }
+            }
+            
+            // Draw target crosshair and line for first alive plane
+            AIPlane firstPlane = evolutionManager.getPopulation().stream()
+                .filter(p -> p.alive).findFirst().orElse(null);
+            if (firstPlane != null) {
+                // Find next obstacle
+                Obstacle nextObs = null;
+                for (Obstacle obs : obstacles) {
+                    if (obs.x + PIPE_WIDTH > 80) {
+                        nextObs = obs;
+                        break;
+                    }
+                }
+                
+                if (nextObs != null) {
+                    int targetX = nextObs.x + PIPE_WIDTH/2;
+                    int targetY = nextObs.gapY;
+                    
+                    // Draw crosshair
+                    g2d.setColor(Color.GREEN);
+                    g2d.setStroke(new BasicStroke(2));
+                    g2d.drawLine(targetX - 5, targetY, targetX + 5, targetY);
+                    g2d.drawLine(targetX, targetY - 5, targetX, targetY + 5);
+                    
+                    // Draw line from plane to target
+                    g2d.setColor(Color.YELLOW);
+                    g2d.setStroke(new BasicStroke(1));
+                    g2d.drawLine(80 + planeWidth/2, (int)firstPlane.y + planeHeight/2, 
+                               targetX, targetY);
                 }
             }
         } else {

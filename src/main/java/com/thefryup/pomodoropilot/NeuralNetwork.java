@@ -3,11 +3,11 @@ package com.thefryup.pomodoropilot;
 import java.util.Random;
 
 public class NeuralNetwork {
-    private static final int INPUT_SIZE = 7;
+    private static final int INPUT_SIZE = 9; // 7 raycasts + 2 target inputs
     private static final int HIDDEN_SIZE = 10;
     private static final int OUTPUT_SIZE = 1;
     
-    private double[][] weightsInputHidden;  // 7x10
+    private double[][] weightsInputHidden;  // 9x10
     private double[] biasHidden;            // 10
     private double[][] weightsHiddenOutput; // 10x1
     private double[] biasOutput;            // 1
