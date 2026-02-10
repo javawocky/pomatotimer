@@ -100,84 +100,30 @@ public class EvolutionManager {
             fitnessHistory.remove(0);
         }
         
-        System.out.println("Generation " + generation + " complete. Best fitness: " + bestThisGen);
+        // Generation complete
         
-        // Create next generation
+        // Create next generation - standard genetic algorithm
         List<AIPlane> nextGen = new ArrayList<>();
         
-        // Early generations: more diversity, less champion copying
-        // Later generations: more champion copying as quality improves
-        boolean earlyGeneration = generation < 20;
-        double bestFitness = population.get(0).getFitness();
-        boolean lowQualityChampion = bestFitness < 50; // Champion hasn't passed many obstacles
+        // Keep top 2 elites
+        nextGen.add(new AIPlane(0, population.get(0).brain.clone()));
+        nextGen.add(new AIPlane(1, population.get(1).brain.clone()));
         
-        if (earlyGeneration || lowQualityChampion) {
-            // Early/low-quality: Keep only 1 elite, more diversity
-            nextGen.add(new AIPlane(0, population.get(0).brain.clone()));
-            
-            // More crossover diversity from top 7
-            for (int i = 0; i < 7; i++) {
-                int parent1Idx = rand.nextInt(7);
-                int parent2Idx = rand.nextInt(7);
-                while (parent2Idx == parent1Idx) {
-                    parent2Idx = rand.nextInt(7);
-                }
-                
-                NeuralNetwork child = NeuralNetwork.crossover(
-                    population.get(parent1Idx).brain, 
-                    population.get(parent2Idx).brain, 
-                    rand
-                );
-                child.mutate(MUTATION_RATE * 0.8, rand); // Moderate mutation
-                nextGen.add(new AIPlane(i % 4, child));
+        // Fill rest with crossover from top 5
+        for (int i = 2; i < POPULATION_SIZE; i++) {
+            int parent1Idx = rand.nextInt(5);
+            int parent2Idx = rand.nextInt(5);
+            while (parent2Idx == parent1Idx) {
+                parent2Idx = rand.nextInt(5);
             }
             
-            // Random mutations for exploration
-            for (int i = 0; i < 2; i++) {
-                int parentIdx = rand.nextInt(8);
-                NeuralNetwork brain = population.get(parentIdx).brain.clone();
-                brain.mutate(MUTATION_RATE * 1.5, rand);
-                nextGen.add(new AIPlane(i % 4, brain));
-            }
-        } else {
-            // Later/high-quality: More champion copying
-            nextGen.add(new AIPlane(0, population.get(0).brain.clone()));
-            nextGen.add(new AIPlane(1, population.get(1).brain.clone()));
-            nextGen.add(new AIPlane(2, population.get(2).brain.clone()));
-            
-            // Champion clones with light mutation
-            for (int i = 0; i < 3; i++) {
-                NeuralNetwork brain = population.get(0).brain.clone();
-                brain.mutate(MUTATION_RATE * 0.3, rand); // Very light mutation
-                nextGen.add(new AIPlane(i % 4, brain));
-            }
-            
-            // Crossover from top 5
-            for (int i = 0; i < 3; i++) {
-                int parent1Idx = rand.nextInt(5);
-                int parent2Idx = rand.nextInt(5);
-                while (parent2Idx == parent1Idx) {
-                    parent2Idx = rand.nextInt(5);
-                }
-                
-                NeuralNetwork child = NeuralNetwork.crossover(
-                    population.get(parent1Idx).brain, 
-                    population.get(parent2Idx).brain, 
-                    rand
-                );
-                child.mutate(MUTATION_RATE * 0.5, rand);
-                nextGen.add(new AIPlane(i % 4, child));
-            }
-            
-            // One explorer
-            NeuralNetwork brain = population.get(0).brain.clone();
-            brain.mutate(MUTATION_RATE * 2.0, rand);
-            nextGen.add(new AIPlane(3, brain));
-        }
-        
-        // Assign colors
-        for (int i = 0; i < nextGen.size(); i++) {
-            nextGen.get(i).colorIndex = i % 4;
+            NeuralNetwork child = NeuralNetwork.crossover(
+                population.get(parent1Idx).brain, 
+                population.get(parent2Idx).brain, 
+                rand
+            );
+            child.mutate(MUTATION_RATE, rand);
+            nextGen.add(new AIPlane(i % 4, child));
         }
         
         population = nextGen;

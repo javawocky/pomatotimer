@@ -9,9 +9,12 @@ A Pomodoro timer with an integrated Flappy Bird-style game to keep you focused d
 ### Game Modes
 
 **Work Phase (AI Mode)**
-- The game starts with AI controlling the plane
-- Watch the plane navigate through obstacles automatically
-- The AI demonstrates optimal gameplay
+- The game starts with AI controlling the plane using neural networks and genetic algorithms
+- Watch multiple AI planes learn to navigate through obstacles automatically
+- Press **A** to toggle between AI learning mode and classic mode
+- Press **T** to enable turbo mode for faster AI training
+- Press **R** to visualize the AI's raycast sensors (color-coded by distance)
+- The AI demonstrates optimal gameplay and evolves over generations
 
 **Work Phase (Manual Mode)**
 - Press **SPACE** to take control and jump
@@ -28,12 +31,18 @@ A Pomodoro timer with an integrated Flappy Bird-style game to keep you focused d
 ### Controls
 
 - **SPACE** - Jump (take manual control during work phase)
+- **T** - Toggle turbo mode (fast rendering for AI training)
 - **B** - Toggle background rendering on/off
 - **F** - Toggle fullscreen mode
+- **R** - Toggle raycast visualization on/off
+- **A** - Toggle between AI learning mode and classic mode
 - **Click anywhere** - Show/hide Skip and Exit buttons
 
 ### Features
 
+- **AI Learning Mode**: Neural network-powered planes that learn through genetic algorithms
+- **Turbo Mode**: Press 'T' for accelerated AI training while timer runs in real time
+- **Raycast Visualization**: Press 'R' to see AI sensor data with distance-based color coding
 - **Dynamic Difficulty**: Obstacles increase every 3 seconds, spawn rate accelerates
 - **Day/Night Cycle**: Randomly switches between day and night modes every 15 seconds with smooth 5-second transitions
 - **High Score Table**: Top 5 scores are saved and displayed

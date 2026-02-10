@@ -36,6 +36,7 @@ public class GamePanel extends JPanel {
     private int cachedGroundY = 0;
     private int cachedLandingY = 0;
     private boolean renderBackground = true;
+    private boolean turboMode = false;
     
     private ArrayList<BackgroundPlane> backgroundPlanes = new ArrayList<>();
     private ArrayList<Obstacle> obstacles = new ArrayList<>();
@@ -133,6 +134,8 @@ public class GamePanel extends JPanel {
                     toggleFullscreen();
                 } else if (e.getKeyCode() == KeyEvent.VK_B) {
                     renderBackground = !renderBackground;
+                } else if (e.getKeyCode() == KeyEvent.VK_T) {
+                    turboMode = !turboMode;
                 } else if (e.getKeyCode() == KeyEvent.VK_R) {
                     showRaycasts = !showRaycasts;
                     System.out.println("Raycasts: " + (showRaycasts ? "ON" : "OFF"));
@@ -171,7 +174,11 @@ public class GamePanel extends JPanel {
                     });
                 }
                 try {
-                    Thread.sleep(33);
+                    if (!turboMode) {
+                        Thread.sleep(33);
+                    } else {
+                        Thread.sleep(1); // Very short sleep in turbo mode
+                    }
                 } catch (InterruptedException e) {
                     break;
                 }
@@ -456,10 +463,6 @@ public class GamePanel extends JPanel {
                     int gapY = 50 + (int)(Math.random() * 120);
                     obstacles.add(new Obstacle(320 + PIPE_WIDTH, gapY));
                     spawnTimer = 0;
-                    // Debug: print spawn interval every 10 obstacles
-                    if (score % 100 == 0) {
-                        System.out.println("Sec: " + secondsElapsed + ", Max: " + maxObstacles + ", Ahead: " + obstaclesAhead + ", Total: " + obstacles.size() + ", Interval: " + spawnInterval);
-                    }
                 }
             }
 
@@ -480,17 +483,13 @@ public class GamePanel extends JPanel {
                     obs.scored = true;
                     if (aiLearningMode && evolutionManager != null) {
                         // Score only alive planes - each plane gets points individually when they pass
-                        int alivePlanes = 0;
                         for (AIPlane plane : evolutionManager.getPopulation()) {
                             if (plane.alive) {
                                 plane.score += 10;
-                                alivePlanes++;
                             }
                         }
-                        System.out.println("Obstacle passed! " + alivePlanes + " alive planes each got +10 points");
                     } else {
                         score += 10;
-                        System.out.println("Player passed obstacle! Score now: " + score);
                         if (score > highScore) {
                             highScore = score;
                             saveHighScore();
