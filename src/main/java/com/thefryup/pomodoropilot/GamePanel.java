@@ -141,10 +141,10 @@ public class GamePanel extends JPanel {
                     turboMode = !turboMode;
                 } else if (e.getKeyCode() == KeyEvent.VK_R) {
                     showRaycasts = !showRaycasts;
-                    System.out.println("Raycasts: " + (showRaycasts ? "ON" : "OFF"));
+                    // Console output removed
                 } else if (e.getKeyCode() == KeyEvent.VK_A) {
                     aiLearningMode = !aiLearningMode;
-                    System.out.println("AI Mode: " + (aiLearningMode ? "LEARNING (ML)" : "CLASSIC"));
+                    // Console output removed
                     if (isWorking) {
                         startWork(); // Restart to apply mode change
                     }
@@ -153,7 +153,7 @@ public class GamePanel extends JPanel {
                         fastForwardMode = true;
                         wasTurboMode = turboMode;
                         fastForwardStartGen = evolutionManager.getGeneration();
-                        System.out.println("Fast-forward: +50 generations from gen " + fastForwardStartGen);
+                        // Console output removed
                     }
                 } else if (e.getKeyCode() == KeyEvent.VK_SPACE) {
                     if (isWorking && !isGameOver && !spacePressed && !landingSequenceActive && planeY > 15) {
@@ -590,15 +590,15 @@ public class GamePanel extends JPanel {
                     // Check if fast-forward is complete
                     if (fastForwardMode) {
                         int progress = newGen - fastForwardStartGen;
-                        System.out.println("Gen " + newGen + " [FF: " + progress + "/50, start=" + fastForwardStartGen + "]");
+                        // Console output removed
                         
                         if (progress >= 50) {
                             fastForwardMode = false;
                             turboMode = wasTurboMode;
-                            System.out.println(">>> Fast-forward COMPLETE! <<<");
+                            // Console output removed
                         }
                     } else {
-                        System.out.println("Gen " + newGen);
+                        // Console output removed
                     }
                     
                     // Reset game state for new generation
@@ -665,9 +665,9 @@ public class GamePanel extends JPanel {
             // Bottom boundary - game over in manual mode at screen bottom
             if (planeY + planeHeight > 240) {
                 if (isManualControl) {
-                    System.out.println("\n=== FELL OFF BOTTOM ===");
-                    System.out.println("Player: " + playerName);
-                    System.out.println("Score: " + score);
+                    // Console output removed
+                    // Console output removed
+                    // Console output removed
                     
                     isGameOver = true;
                     gameOverTimer = 0;
@@ -682,7 +682,7 @@ public class GamePanel extends JPanel {
                         newHighScoreTimer = 0;
                         newHighScoreValue = score;
                     }
-                    System.out.println("========================\n");
+                    // Console output removed
                 } else {
                     planeY = cachedGroundY - planeHeight;
                     planeVelY = 0;
@@ -726,9 +726,9 @@ public class GamePanel extends JPanel {
                     }
                     
                     if (collision) {
-                        System.out.println("\n=== COLLISION DETECTED ===");
-                        System.out.println("Player: " + playerName);
-                        System.out.println("Score: " + score);
+                        // Console output removed
+                        // Console output removed
+                        // Console output removed
                         
                         isGameOver = true;
                         gameOverTimer = 0;
@@ -736,19 +736,19 @@ public class GamePanel extends JPanel {
                         // Update high score immediately
                         if (score > highScore) {
                             highScore = score;
-                            System.out.println("New high score: " + highScore);
+                            // Console output removed
                         }
                         // Check if score qualifies for high score table
                         boolean qualifies = highScoreTable.size() < 5 || score > highScoreTable.get(4).score;
-                        System.out.println("Qualifies for table: " + qualifies);
+                        // Console output removed
                         if (qualifies) {
                             addHighScore(playerName, score);
                             showNewHighScore = true;
                             newHighScoreTimer = 0;
                             newHighScoreValue = score;
-                            System.out.println("Added to high score table");
+                            // Console output removed
                         }
-                        System.out.println("========================\n");
+                        // Console output removed
                     }
                 }
             }
@@ -885,12 +885,6 @@ public class GamePanel extends JPanel {
                     g2d.setStroke(new BasicStroke(2));
                     g2d.drawLine(targetX - 5, targetY, targetX + 5, targetY);
                     g2d.drawLine(targetX, targetY - 5, targetX, targetY + 5);
-                    
-                    // Draw line from plane to target
-                    g2d.setColor(Color.YELLOW);
-                    g2d.setStroke(new BasicStroke(1));
-                    g2d.drawLine(80 + planeWidth/2, (int)firstPlane.y + planeHeight/2, 
-                               targetX, targetY);
                 }
                 
                 // Draw second target in red
@@ -1065,16 +1059,16 @@ public class GamePanel extends JPanel {
         if (aiLearningMode) {
             if (evolutionManager == null) {
                 evolutionManager = new EvolutionManager();
-                System.out.println("\n=== STARTING ML LEARNING MODE ===");
-                System.out.println("Generation 1 - Population: 10");
+                // Console output removed
+                // Console output removed
             } else {
-                System.out.println("\n=== RESUMING ML LEARNING MODE ===");
-                System.out.println("Generation " + evolutionManager.getGeneration() + " - Population: 10");
+                // Console output removed
+                // Console output removed
             }
         } else {
             evolutionManager = null;
-            System.out.println("\n=== STARTING WORK PHASE ===");
-            System.out.println("Player: " + playerName);
+            // Console output removed
+            // Console output removed
         }
         
         String[] colors = {"Blue", "Green", "Red", "Yellow"};
@@ -1119,7 +1113,7 @@ public class GamePanel extends JPanel {
             // Delete temp file
             tempFile.delete();
             
-            System.out.println("Screenshot saved: " + outputFile.getAbsolutePath() + " (" + (width*3) + "x" + (height*3) + ")");
+            // Console output removed
         } catch (IOException | InterruptedException e) {
             System.err.println("Failed to save screenshot: " + e.getMessage());
         }
@@ -1146,39 +1140,39 @@ public class GamePanel extends JPanel {
     }
 
     public void startBreak() {
-        System.out.println("\n=== STARTING BREAK PHASE ===");
-        System.out.println("Player: " + playerName);
-        System.out.println("Current Score: " + score);
-        System.out.println("Current High Score: " + highScore);
+        // Console output removed
+        // Console output removed
+        // Console output removed
+        // Console output removed
         
-        System.out.println("\nHigh Score Table BEFORE update:");
+        // Console output removed
         for (int i = 0; i < highScoreTable.size(); i++) {
             HighScoreEntry entry = highScoreTable.get(i);
-            System.out.println("  " + (i+1) + ": " + entry.name + " - " + entry.score);
+            // Console output removed
         }
         
         // Update high score table with current score
         if (score > highScore) {
             highScore = score;
-            System.out.println("\nUpdated high score to: " + highScore);
+            // Console output removed
         }
         
         boolean qualifies = highScoreTable.size() < 5 || score > highScoreTable.get(4).score;
-        System.out.println("\nQualifies for high score table: " + qualifies);
+        // Console output removed
         if (qualifies) {
-            System.out.println("Adding " + playerName + " with score " + score);
+            // Console output removed
             addHighScore(playerName, score);
             showNewHighScore = true;
             newHighScoreTimer = 0;
             newHighScoreValue = score;
         }
         
-        System.out.println("\nHigh Score Table AFTER update:");
+        // Console output removed
         for (int i = 0; i < highScoreTable.size(); i++) {
             HighScoreEntry entry = highScoreTable.get(i);
-            System.out.println("  " + (i+1) + ": " + entry.name + " - " + entry.score);
+            // Console output removed
         }
-        System.out.println("========================\n");
+        // Console output removed
         
         isWorking = false;
         isLanding = true;
@@ -1258,6 +1252,27 @@ public class GamePanel extends JPanel {
             int y2 = graphY + graphHeight - (int)(fitness2 / maxFitness * graphHeight);
             
             g2d.drawLine(x1, y1, x2, y2);
+        }
+        
+        // Draw 5-game moving average in red
+        if (history.size() >= 5) {
+            g2d.setColor(new Color(255, 0, 0, 180));
+            g2d.setStroke(new BasicStroke(2));
+            
+            for (int i = 4; i < history.size(); i++) {
+                double avg1 = (history.get(i - 4) + history.get(i - 3) + history.get(i - 2) + history.get(i - 1) + history.get(i)) / 5.0;
+                double avg2 = i + 1 < history.size() ? 
+                    (history.get(i - 3) + history.get(i - 2) + history.get(i - 1) + history.get(i) + history.get(i + 1)) / 5.0 : avg1;
+                
+                int x1 = graphX + (int)(i * graphWidth / (double)Math.max(1, history.size() - 1));
+                int y1 = graphY + graphHeight - (int)(avg1 / maxFitness * graphHeight);
+                
+                if (i + 1 < history.size()) {
+                    int x2 = graphX + (int)((i + 1) * graphWidth / (double)Math.max(1, history.size() - 1));
+                    int y2 = graphY + graphHeight - (int)(avg2 / maxFitness * graphHeight);
+                    g2d.drawLine(x1, y1, x2, y2);
+                }
+            }
         }
     }
     
@@ -1453,18 +1468,18 @@ public class GamePanel extends JPanel {
     }
     
     public void dumpState() {
-        System.out.println("Player: " + playerName);
-        System.out.println("Score: " + score);
-        System.out.println("High Score: " + highScore);
-        System.out.println("Is Working: " + isWorking);
-        System.out.println("Is Game Over: " + isGameOver);
-        System.out.println("Is Manual Control: " + isManualControl);
-        System.out.println("Show New High Score: " + showNewHighScore);
-        System.out.println("New High Score Value: " + newHighScoreValue);
-        System.out.println("\nHigh Score Table:");
+        // Console output removed
+        // Console output removed
+        // Console output removed
+        // Console output removed
+        // Console output removed
+        // Console output removed
+        // Console output removed
+        // Console output removed
+        // Console output removed
         for (int i = 0; i < highScoreTable.size(); i++) {
             HighScoreEntry entry = highScoreTable.get(i);
-            System.out.println("  " + (i+1) + ": " + entry.name + " - " + entry.score);
+            // Console output removed
         }
     }
     

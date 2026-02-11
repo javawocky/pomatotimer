@@ -50,8 +50,8 @@ public class AIPlane {
         
         survivalTime++;
         
-        // Prepare inputs for neural network (9 raycasts + 4 target inputs)
-        double[] inputs = new double[13];
+        // Prepare inputs for neural network (9 raycasts + 5 target inputs)
+        double[] inputs = new double[14];
         for (int i = 0; i < 9; i++) {
             inputs[i] = rays[i].distance;
         }
@@ -69,6 +69,10 @@ public class AIPlane {
         
         // Distance to second target
         inputs[12] = Math.max(0.0, Math.min(1.0, 1.0 - (target2Distance / 320.0)));
+        
+        // Slope between first and second target (-1 to 1)
+        double slope = target2Distance > 0 ? (target2Y - targetY) / Math.max(1.0, target2Distance) : 0.0;
+        inputs[13] = Math.max(-1.0, Math.min(1.0, slope / 120.0)); // Normalize by screen height
         
         // Get decision from neural network
         double output = brain.predict(inputs);

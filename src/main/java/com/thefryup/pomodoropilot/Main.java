@@ -68,16 +68,16 @@ public class Main {
             breakMinutes = showStartupDialog("Break", 5);
         }
         
-        System.out.println("Work time: " + (workMinutes / 60.0) + " minutes");
-        System.out.println("Break time: " + (breakMinutes / 60.0) + " minutes");
+        // Console output removed
+        // Console output removed
         if (screenshotAt >= 0) {
-            System.out.println("Screenshot at: " + screenshotAt + " seconds -> " + screenshotName);
+            // Console output removed
         }
         if (fastForward) {
-            System.out.println("Fast forward mode enabled");
+            // Console output removed
         }
         if (nightMode != null) {
-            System.out.println("Night mode: " + nightMode);
+            // Console output removed
         }
 
         var jw = new AppWindow();
@@ -93,7 +93,7 @@ public class Main {
         }
 
         while(true) {
-            System.out.println("\nStarting timer...");
+            // Console output removed
             Alarm.playBegin();
             jw.startWork();
 
@@ -119,7 +119,7 @@ public class Main {
                 if(jw.isSkip()) break;
             }
 
-            System.out.println("\nTime for a break!");
+            // Console output removed
             Alarm.playAlarm();
             jw.startBreak();
             
@@ -145,7 +145,7 @@ public class Main {
                 if(jw.isSkip()) break;
             }
 
-            System.out.println("\nTimer finished!");
+            // Console output removed
         }
     }
 
