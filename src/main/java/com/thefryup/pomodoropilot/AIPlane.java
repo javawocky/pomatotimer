@@ -50,8 +50,8 @@ public class AIPlane {
         
         survivalTime++;
         
-        // Prepare inputs for neural network (9 raycasts + 5 target inputs)
-        double[] inputs = new double[14];
+        // Prepare inputs for neural network (9 raycasts + 5 target inputs + 1 velocity)
+        double[] inputs = new double[15];
         for (int i = 0; i < 9; i++) {
             inputs[i] = rays[i].distance;
         }
@@ -73,6 +73,10 @@ public class AIPlane {
         // Slope between first and second target (-1 to 1)
         double slope = target2Distance > 0 ? (target2Y - targetY) / Math.max(1.0, target2Distance) : 0.0;
         inputs[13] = Math.max(-1.0, Math.min(1.0, slope / 120.0)); // Normalize by screen height
+        
+        // Y velocity normalized (-1 = max fall, 1 = max jump)
+        // Max fall speed is around 10, max jump is -4.5
+        inputs[14] = Math.max(-1.0, Math.min(1.0, velY / 10.0));
         
         // Get decision from neural network
         double output = brain.predict(inputs);

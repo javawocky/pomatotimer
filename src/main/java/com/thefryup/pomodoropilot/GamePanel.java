@@ -1310,12 +1310,22 @@ public class GamePanel extends JPanel {
         // Draw connections first (behind nodes)
         g2d.setStroke(new BasicStroke(1));
         
-        // Input to H1
-        for (int i = 0; i < Math.min(inputs.length, 8); i++) {
+        // Input to H1 (first 8 raycasts)
+        for (int i = 0; i < 8; i++) {
             int y1 = netY + 5 + i * 5;
             for (int j = 0; j < Math.min(h1.length, 8); j++) {
                 int y2 = netY + 5 + j * 5;
                 float activation = (float)Math.abs(inputs[i] * h1[j]);
+                g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+                g2d.drawLine(layerX[0], y1, layerX[1], y2);
+            }
+        }
+        // Velocity input (input 14) to H1
+        if (inputs.length > 14) {
+            int y1 = netY + 5 + 8 * 5;
+            for (int j = 0; j < Math.min(h1.length, 8); j++) {
+                int y2 = netY + 5 + j * 5;
+                float activation = (float)Math.abs(inputs[14] * h1[j]);
                 g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
                 g2d.drawLine(layerX[0], y1, layerX[1], y2);
             }
@@ -1342,10 +1352,17 @@ public class GamePanel extends JPanel {
         }
         
         // Draw nodes
-        // Input layer (show first 8)
-        for (int i = 0; i < Math.min(inputs.length, 8); i++) {
+        // Input layer (show first 8 raycasts + velocity as 9th)
+        for (int i = 0; i < 8; i++) {
             int y = netY + 5 + i * 5;
             float val = (float)((inputs[i] + 1) / 2); // Normalize -1 to 1 -> 0 to 1
+            g2d.setColor(new Color(1 - val, val, 0));
+            g2d.fillOval(layerX[0] - 1, y - 1, nodeSize, nodeSize);
+        }
+        // Show velocity input (input 14) as 9th node
+        if (inputs.length > 14) {
+            int y = netY + 5 + 8 * 5;
+            float val = (float)((inputs[14] + 1) / 2); // Velocity: -1 to 1 -> 0 to 1
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[0] - 1, y - 1, nodeSize, nodeSize);
         }
