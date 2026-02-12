@@ -311,3 +311,30 @@ Replace the deterministic AI with a neural network-based system that learns thro
 4. Population + evolutionary algorithm (Phase 3)
 5. UI toggle and stats display (Phase 4)
 6. Testing and tuning (Phase 5)
+
+
+---
+
+## Future Enhancements
+
+### Native Executables with jpackage
+Create platform-specific installers using jpackage (included in JDK 17+):
+
+**Benefits:**
+- Self-contained apps (no Java installation required for users)
+- Native installers (.exe, .dmg, .deb)
+- Professional distribution
+
+**Implementation:**
+- Set up GitHub Actions workflow with matrix build (Windows, macOS, Linux)
+- Use jpackage to create platform-specific bundles
+- Automated builds on release tags
+- Upload artifacts to GitHub Releases
+
+**Considerations:**
+- macOS signing requires Apple Developer account ($99/year) for Gatekeeper
+- Windows SmartScreen warning (acceptable for open-source)
+- Linux requires no signing
+- Alternative: Provide unsigned builds with user instructions
+
+**Estimated effort:** 2-3 hours setup + testing
