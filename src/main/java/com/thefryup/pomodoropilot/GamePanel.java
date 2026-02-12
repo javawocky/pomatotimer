@@ -84,8 +84,8 @@ public class GamePanel extends JPanel {
     
     // Night mode - global timer independent of game state
     private float nightFilter = 0.0f; // 0.0 = day, 1.0 = full night
-    private int lastNightFilterFrame = -1;
-    private BufferedImage[] cachedNightImages = null;
+    private float cachedNightFilterValue = -1.0f;
+    private java.util.Map<BufferedImage, BufferedImage> nightFilterCache = new java.util.HashMap<>();
     private float targetNightFilter = 0.0f;
     private int lastModeDecisionSecond = 0;
     private int globalFrameCounter = 0;
@@ -108,6 +108,10 @@ public class GamePanel extends JPanel {
     // AI Learning mode
     private boolean aiLearningMode = true; // Default to ML mode
     private EvolutionManager evolutionManager = null;
+    
+    // Render optimizations
+    private BufferedImage[][] colorFramesCache;
+    private BufferedImage[] flippedPlaneCache;
 
     public GamePanel() {
         setPreferredSize(new Dimension(320, 240));
@@ -352,7 +356,15 @@ public class GamePanel extends JPanel {
         if (nightFilter == 0.0f) {
             return img;
         }
-        return applyNightFilter(img, nightFilter);
+        
+        // Check if filter value changed - invalidate cache
+        if (Math.abs(nightFilter - cachedNightFilterValue) > 0.001f) {
+            nightFilterCache.clear();
+            cachedNightFilterValue = nightFilter;
+        }
+        
+        // Return cached version if available
+        return nightFilterCache.computeIfAbsent(img, k -> applyNightFilter(k, nightFilter));
     }
 
     private void update() {
@@ -835,23 +847,50 @@ public class GamePanel extends JPanel {
             g2d.drawImage(platformFiltered, platformX, cachedLandingY + planeHeight, null);
         }
 
-        // Draw planes
-        if (aiLearningMode && evolutionManager != null && isWorking) {
-            // ML Mode: Draw all AI planes
-            BufferedImage[][] colorFrames = {
+        // Cache color frames array (created once)
+        if (colorFramesCache == null) {
+            colorFramesCache = new BufferedImage[][] {
                 {planeBlue1, planeBlue2, planeBlue3},
                 {planeRed1, planeRed2, planeRed3},
                 {planeGreen1, planeGreen2, planeGreen3},
                 {planeYellow1, planeYellow2, planeYellow3}
             };
+        }
+        
+        // Find next obstacles once per frame (used multiple times below)
+        Obstacle nextObs = null;
+        Obstacle secondObs = null;
+        if (isWorking) {
+            boolean foundFirst = false;
+            for (Obstacle obs : obstacles) {
+                if (obs.x + PIPE_WIDTH > 80) {
+                    if (!foundFirst) {
+                        nextObs = obs;
+                        foundFirst = true;
+                    } else {
+                        secondObs = obs;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        int currentFrame = (frameCounter / 5) % 3;
+
+        // Draw planes
+        if (aiLearningMode && evolutionManager != null && isWorking) {
+            // ML Mode: Draw all AI planes
+            AIPlane firstPlane = null;
             
             for (AIPlane plane : evolutionManager.getPopulation()) {
                 if (plane.alive) {
-                    BufferedImage[] frames = colorFrames[plane.colorIndex];
-                    BufferedImage planeImg = getNightFilteredImage(frames[(frameCounter / 5) % 3]);
+                    if (firstPlane == null) firstPlane = plane;
                     
-                    // Draw raycasts behind the plane
-                    if (showRaycasts) {
+                    BufferedImage[] frames = colorFramesCache[plane.colorIndex];
+                    BufferedImage planeImg = getNightFilteredImage(frames[currentFrame]);
+                    
+                    // Draw raycasts behind the plane (only for first plane to reduce overhead)
+                    if (showRaycasts && plane == firstPlane) {
                         RaycastSensor.RayResult[] rays = RaycastSensor.castRays(
                             80 + planeWidth/2, plane.y + planeHeight/2, obstacles);
                         RaycastSensor.drawRays(g2d, 80 + planeWidth/2, plane.y + planeHeight/2, rays);
@@ -861,36 +900,16 @@ public class GamePanel extends JPanel {
                 }
             }
             
-            // Draw target crosshair and line for first alive plane
-            AIPlane firstPlane = evolutionManager.getPopulation().stream()
-                .filter(p -> p.alive).findFirst().orElse(null);
-            if (firstPlane != null) {
-                // Find next two obstacles
-                Obstacle nextObs = null;
-                Obstacle secondObs = null;
-                boolean foundFirst = false;
-                for (Obstacle obs : obstacles) {
-                    if (obs.x + PIPE_WIDTH > 80) {
-                        if (!foundFirst) {
-                            nextObs = obs;
-                            foundFirst = true;
-                        } else {
-                            secondObs = obs;
-                            break;
-                        }
-                    }
-                }
+            // Draw target crosshairs using pre-found obstacles
+            if (firstPlane != null && nextObs != null) {
+                int targetX = nextObs.x + PIPE_WIDTH/2;
+                int targetY = nextObs.gapY;
                 
-                if (nextObs != null) {
-                    int targetX = nextObs.x + PIPE_WIDTH/2;
-                    int targetY = nextObs.gapY;
-                    
-                    // Draw crosshair
-                    g2d.setColor(Color.GREEN);
-                    g2d.setStroke(new BasicStroke(2));
-                    g2d.drawLine(targetX - 5, targetY, targetX + 5, targetY);
-                    g2d.drawLine(targetX, targetY - 5, targetX, targetY + 5);
-                }
+                // Draw crosshair
+                g2d.setColor(Color.GREEN);
+                g2d.setStroke(new BasicStroke(2));
+                g2d.drawLine(targetX - 5, targetY, targetX + 5, targetY);
+                g2d.drawLine(targetX, targetY - 5, targetX, targetY + 5);
                 
                 // Draw second target in red
                 if (secondObs != null) {
@@ -905,7 +924,7 @@ public class GamePanel extends JPanel {
             }
         } else {
             // Classic Mode: Draw single plane
-            BufferedImage planeFiltered = getNightFilteredImage(planeFrames[(frameCounter / 5) % 3]);
+            BufferedImage planeFiltered = getNightFilteredImage(planeFrames[currentFrame]);
             
             if (!isLanding) {
                 g2d.drawImage(planeFiltered, 80, (int)planeY, null);
@@ -921,21 +940,15 @@ public class GamePanel extends JPanel {
         
         if (!isWorking) {
             for (BackgroundPlane bp : backgroundPlanes) {
-                BufferedImage[] frames;
-                switch(bp.color) {
-                    case 0: frames = new BufferedImage[]{planeBlue1, planeBlue2, planeBlue3}; break;
-                    case 1: frames = new BufferedImage[]{planeRed1, planeRed2, planeRed3}; break;
-                    case 2: frames = new BufferedImage[]{planeGreen1, planeGreen2, planeGreen3}; break;
-                    default: frames = new BufferedImage[]{planeYellow1, planeYellow2, planeYellow3}; break;
-                }
-                BufferedImage planeImg = frames[(frameCounter / 5) % 3];
+                BufferedImage[] frames = colorFramesCache[bp.color];
+                BufferedImage planeImg = frames[currentFrame];
                 BufferedImage planeImgFiltered = getNightFilteredImage(planeImg);
+                
                 if (bp.speed < 0) {
-                    BufferedImage flipped = new BufferedImage(planeImgFiltered.getWidth(), planeImgFiltered.getHeight(), BufferedImage.TYPE_INT_ARGB);
-                    Graphics2D gFlip = flipped.createGraphics();
-                    gFlip.drawImage(planeImgFiltered, planeImgFiltered.getWidth(), 0, -planeImgFiltered.getWidth(), planeImgFiltered.getHeight(), null);
-                    gFlip.dispose();
-                    g2d.drawImage(flipped, (int)bp.x, (int)bp.y, null);
+                    // Draw flipped using negative width (faster than creating new image)
+                    g2d.drawImage(planeImgFiltered, 
+                        (int)bp.x + planeImgFiltered.getWidth(), (int)bp.y, 
+                        -planeImgFiltered.getWidth(), planeImgFiltered.getHeight(), null);
                 } else {
                     g2d.drawImage(planeImgFiltered, (int)bp.x, (int)bp.y, null);
                 }
@@ -1243,7 +1256,7 @@ public class GamePanel extends JPanel {
         
         // Find max fitness for scaling
         double maxFitness = history.stream().mapToDouble(d -> d).max().orElse(1.0);
-        if (maxFitness < 10) maxFitness = 10; // Minimum scale
+        if (maxFitness < 10) maxFitness = 10;
         
         // Draw line graph
         g2d.setColor(new Color(0, 255, 0, 180));
@@ -1269,13 +1282,12 @@ public class GamePanel extends JPanel {
             
             for (int i = 4; i < history.size(); i++) {
                 double avg1 = (history.get(i - 4) + history.get(i - 3) + history.get(i - 2) + history.get(i - 1) + history.get(i)) / 5.0;
-                double avg2 = i + 1 < history.size() ? 
-                    (history.get(i - 3) + history.get(i - 2) + history.get(i - 1) + history.get(i) + history.get(i + 1)) / 5.0 : avg1;
                 
                 int x1 = graphX + (int)(i * graphWidth / (double)Math.max(1, history.size() - 1));
                 int y1 = graphY + graphHeight - (int)(avg1 / maxFitness * graphHeight);
                 
                 if (i + 1 < history.size()) {
+                    double avg2 = (history.get(i - 3) + history.get(i - 2) + history.get(i - 1) + history.get(i) + history.get(i + 1)) / 5.0;
                     int x2 = graphX + (int)((i + 1) * graphWidth / (double)Math.max(1, history.size() - 1));
                     int y2 = graphY + graphHeight - (int)(avg2 / maxFitness * graphHeight);
                     g2d.drawLine(x1, y1, x2, y2);
@@ -1306,71 +1318,86 @@ public class GamePanel extends JPanel {
         
         int nodeSize = 3;
         int[] layerX = {netX + 5, netX + 35, netX + 65, netX + 90};
+        int h1Limit = Math.min(h1.length, 8);
         
-        // Draw connections first (behind nodes)
+        // Set stroke once for all connections
         g2d.setStroke(new BasicStroke(1));
+        
+        // Draw connections - skip very weak ones (< 0.05 threshold)
+        final float threshold = 0.05f;
         
         // Input to H1 (first 8 raycasts)
         for (int i = 0; i < 8; i++) {
             int y1 = netY + 5 + i * 5;
-            for (int j = 0; j < Math.min(h1.length, 8); j++) {
-                int y2 = netY + 5 + j * 5;
-                float activation = (float)Math.abs(inputs[i] * h1[j]);
-                g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
-                g2d.drawLine(layerX[0], y1, layerX[1], y2);
+            double input = inputs[i];
+            for (int j = 0; j < h1Limit; j++) {
+                float activation = (float)Math.abs(input * h1[j]);
+                if (activation > threshold) {
+                    int y2 = netY + 5 + j * 5;
+                    g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+                    g2d.drawLine(layerX[0], y1, layerX[1], y2);
+                }
             }
         }
+        
         // Velocity input (input 14) to H1
         if (inputs.length > 14) {
-            int y1 = netY + 5 + 8 * 5;
-            for (int j = 0; j < Math.min(h1.length, 8); j++) {
-                int y2 = netY + 5 + j * 5;
-                float activation = (float)Math.abs(inputs[14] * h1[j]);
-                g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
-                g2d.drawLine(layerX[0], y1, layerX[1], y2);
+            int y1 = netY + 5 + 40;
+            double velocity = inputs[14];
+            for (int j = 0; j < h1Limit; j++) {
+                float activation = (float)Math.abs(velocity * h1[j]);
+                if (activation > threshold) {
+                    int y2 = netY + 5 + j * 5;
+                    g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+                    g2d.drawLine(layerX[0], y1, layerX[1], y2);
+                }
             }
         }
         
         // H1 to H2
-        for (int i = 0; i < Math.min(h1.length, 8); i++) {
+        for (int i = 0; i < h1Limit; i++) {
             int y1 = netY + 5 + i * 5;
+            double h1Val = h1[i];
             for (int j = 0; j < h2.length; j++) {
-                int y2 = netY + 10 + j * 5;
-                float activation = (float)Math.abs(h1[i] * h2[j]);
-                g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
-                g2d.drawLine(layerX[1], y1, layerX[2], y2);
+                float activation = (float)Math.abs(h1Val * h2[j]);
+                if (activation > threshold) {
+                    int y2 = netY + 10 + j * 5;
+                    g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+                    g2d.drawLine(layerX[1], y1, layerX[2], y2);
+                }
             }
         }
         
         // H2 to Output
+        int y2 = netY + 23;
         for (int i = 0; i < h2.length; i++) {
-            int y1 = netY + 10 + i * 5;
-            int y2 = netY + 23;
             float activation = (float)Math.abs(h2[i] * output);
-            g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
-            g2d.drawLine(layerX[2], y1, layerX[3], y2);
+            if (activation > threshold) {
+                int y1 = netY + 10 + i * 5;
+                g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+                g2d.drawLine(layerX[2], y1, layerX[3], y2);
+            }
         }
         
-        // Draw nodes
-        // Input layer (show first 8 raycasts + velocity as 9th)
+        // Draw nodes - batch by layer to reduce state changes
+        // Input layer (first 8 raycasts + velocity)
         for (int i = 0; i < 8; i++) {
             int y = netY + 5 + i * 5;
-            float val = (float)((inputs[i] + 1) / 2); // Normalize -1 to 1 -> 0 to 1
+            float val = (float)((inputs[i] + 1) * 0.5);
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[0] - 1, y - 1, nodeSize, nodeSize);
         }
-        // Show velocity input (input 14) as 9th node
         if (inputs.length > 14) {
-            int y = netY + 5 + 8 * 5;
-            float val = (float)((inputs[14] + 1) / 2); // Velocity: -1 to 1 -> 0 to 1
+            int y = netY + 5 + 40;
+            float val = (float)((inputs[14] + 1) * 0.5);
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[0] - 1, y - 1, nodeSize, nodeSize);
         }
         
-        // Hidden 1 (show first 8)
-        for (int i = 0; i < Math.min(h1.length, 8); i++) {
+        // Hidden 1 (first 8)
+        for (int i = 0; i < h1Limit; i++) {
             int y = netY + 5 + i * 5;
-            float val = (float)((h1[i] + 1) / 2);
+            float val = (float)((h1[i] + 1) * 0.5);
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[1] - 1, y - 1, nodeSize, nodeSize);
         }
@@ -1378,7 +1405,7 @@ public class GamePanel extends JPanel {
         // Hidden 2
         for (int i = 0; i < h2.length; i++) {
             int y = netY + 10 + i * 5;
-            float val = (float)((h2[i] + 1) / 2);
+            float val = (float)((h2[i] + 1) * 0.5);
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[2] - 1, y - 1, nodeSize, nodeSize);
         }
