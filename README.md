@@ -4,6 +4,40 @@ A Pomodoro timer with an integrated Flappy Bird-style game to keep you focused d
 
 ![Pomodoro Pilot Intro](screenshots/intro.png)
 
+## Quick Start
+
+### Requirements
+- Java 17 or higher
+
+### Download and Run
+
+**Windows:**
+1. Download [PomatoTimer.jar](release/PomatoTimer.jar)
+2. Double-click the JAR file to run with default settings (25 min work, 5 min break)
+3. Or run from Command Prompt with custom times:
+   ```cmd
+   java -jar PomatoTimer.jar
+   ```
+
+**macOS/Linux:**
+```bash
+# Download and run with default settings
+java -jar release/PomatoTimer.jar
+
+# Custom work/break times (in minutes)
+java -jar release/PomatoTimer.jar 50 10
+```
+
+**Command Line Options:**
+```bash
+# Work time and break time in minutes
+java -jar PomatoTimer.jar <work_minutes> <break_minutes>
+
+# Examples:
+java -jar PomatoTimer.jar 25 5   # 25 min work, 5 min break
+java -jar PomatoTimer.jar 50 10  # 50 min work, 10 min break
+```
+
 ## How to Play
 
 ### Game Modes
@@ -35,12 +69,15 @@ A Pomodoro timer with an integrated Flappy Bird-style game to keep you focused d
 - **B** - Toggle background rendering on/off
 - **F** - Toggle fullscreen mode
 - **R** - Toggle raycast visualization on/off
+- **N** - Toggle neural network visualization on/off
 - **A** - Toggle between AI learning mode and classic mode
 - **Click anywhere** - Show/hide Skip and Exit buttons
 
 ### Features
 
 - **AI Learning Mode**: Neural network-powered planes that learn through genetic algorithms
+- **Neural Network Visualization**: Real-time display of the best plane's brain activity with color-coded activation levels
+- **Fitness Graph**: Track AI learning progress over generations with moving average
 - **Turbo Mode**: Press 'T' for accelerated AI training while timer runs in real time
 - **Raycast Visualization**: Press 'R' to see AI sensor data with distance-based color coding
 - **Dynamic Difficulty**: Obstacles increase every 3 seconds, spawn rate accelerates
@@ -122,13 +159,18 @@ Graphics by [Kenney](https://kenney.nl/assets/tappy-plane) - Tappy Plane asset p
 
 ## Screenshots
 
-### Gameplay
+### AI Learning Mode
 
-![Gameplay at 2 minutes](screenshots/gameplay-2min.png)
-*Gameplay at 2 minutes - navigating through obstacles*
+![AI Learning - Early Game](screenshots/ai-learning-30sec.png)
+*AI learning at 30 seconds - fitness graph and neural network visualization*
 
-![Gameplay at 3 minutes](screenshots/gameplay-3min.png)
-*Gameplay at 3 minutes - difficulty increases*
+![AI Learning - Mid Game](screenshots/ai-learning-2min.png)
+*AI learning at 2 minutes - evolved network patterns*
+
+![AI Learning - Advanced](screenshots/ai-learning-5min.png)
+*AI learning at 5 minutes - mature AI behavior*
+
+### Late Game Difficulty
 
 ![Gameplay at 9 minutes](screenshots/gameplay-9min.png)
 *Gameplay at 9 minutes - maximum difficulty*
@@ -140,8 +182,5 @@ Graphics by [Kenney](https://kenney.nl/assets/tappy-plane) - Tappy Plane asset p
 
 ### Night Mode
 
-![Night Mode at 2 minutes](screenshots/gameplay-night-2min.png)
-*Night mode gameplay at 2 minutes*
-
-![Night Mode at 5 minutes](screenshots/gameplay-night-5min.png)
-*Night mode gameplay at 5 minutes*
+![Night Mode with AI](screenshots/ai-night-2min.png)
+*Night mode with AI at 2 minutes*
