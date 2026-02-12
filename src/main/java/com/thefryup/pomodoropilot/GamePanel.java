@@ -1371,7 +1371,7 @@ public class GamePanel extends JPanel {
         // H2 to Output
         int y2 = netY + 23;
         for (int i = 0; i < h2.length; i++) {
-            float activation = (float)Math.abs(h2[i] * output);
+            float activation = (float)Math.abs(h2[i]);
             if (activation > threshold) {
                 int y1 = netY + 10 + i * 5;
                 g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
