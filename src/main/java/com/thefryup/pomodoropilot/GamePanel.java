@@ -1371,6 +1371,13 @@ public class GamePanel extends JPanel {
         float val = (float)output;
         g2d.setColor(new Color(1 - val, val, 0));
         g2d.fillOval(layerX[3] - 1, y - 1, nodeSize, nodeSize);
+        
+        // Draw green ring if output > 0.5 (activated)
+        if (output > 0.5) {
+            g2d.setColor(Color.GREEN);
+            g2d.setStroke(new BasicStroke(0.8f));
+            g2d.drawOval(layerX[3] - 2, y - 2, nodeSize + 2, nodeSize + 2);
+        }
     }
     
     private void drawText(Graphics2D g2d, String text, int x, int y) {
