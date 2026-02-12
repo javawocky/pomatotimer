@@ -129,4 +129,10 @@ public class EvolutionManager {
         population = nextGen;
         generation++;
     }
+    
+    public AIPlane getBestPlane() {
+        return population.stream()
+            .max(Comparator.comparingDouble(AIPlane::getFitness))
+            .orElse(null);
+    }
 }

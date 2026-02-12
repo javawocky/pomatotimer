@@ -102,6 +102,9 @@ public class GamePanel extends JPanel {
     private boolean showRaycasts = true;
     private RaycastSensor.RayResult[] currentRays = null;
     
+    // Network visualization
+    private boolean showNetwork = true;
+    
     // AI Learning mode
     private boolean aiLearningMode = true; // Default to ML mode
     private EvolutionManager evolutionManager = null;
@@ -142,6 +145,8 @@ public class GamePanel extends JPanel {
                 } else if (e.getKeyCode() == KeyEvent.VK_R) {
                     showRaycasts = !showRaycasts;
                     // Console output removed
+                } else if (e.getKeyCode() == KeyEvent.VK_N) {
+                    showNetwork = !showNetwork;
                 } else if (e.getKeyCode() == KeyEvent.VK_A) {
                     aiLearningMode = !aiLearningMode;
                     // Console output removed
@@ -982,6 +987,9 @@ public class GamePanel extends JPanel {
         // Draw learning graph in ML mode
         if (aiLearningMode && evolutionManager != null && isWorking) {
             drawLearningGraph(g2d);
+            if (showNetwork) {
+                drawNetworkVisualization(g2d);
+            }
         }
         
         // Draw intro message
@@ -1221,9 +1229,9 @@ public class GamePanel extends JPanel {
         if (history.isEmpty()) return;
         
         int graphX = 10;
-        int graphY = 180;
-        int graphWidth = 100;
-        int graphHeight = 50;
+        int graphY = 177;
+        int graphWidth = 105;
+        int graphHeight = 53;
         
         // Semi-transparent background
         g2d.setColor(new Color(0, 0, 0, 60));
@@ -1274,6 +1282,95 @@ public class GamePanel extends JPanel {
                 }
             }
         }
+    }
+    
+    private void drawNetworkVisualization(Graphics2D g2d) {
+        AIPlane best = evolutionManager.getBestPlane();
+        if (best == null || best.brain.getLastInputs() == null) return;
+        
+        int netX = 205;
+        int netY = 177;
+        int netWidth = 105;
+        int netHeight = 53;
+        
+        // Background
+        g2d.setColor(new Color(0, 0, 0, 60));
+        g2d.fillRect(netX, netY, netWidth, netHeight);
+        g2d.setColor(new Color(255, 255, 255, 100));
+        g2d.drawRect(netX, netY, netWidth, netHeight);
+        
+        double[] inputs = best.brain.getLastInputs();
+        double[] h1 = best.brain.getLastHidden1();
+        double[] h2 = best.brain.getLastHidden2();
+        double output = best.brain.getLastOutput();
+        
+        int nodeSize = 3;
+        int[] layerX = {netX + 5, netX + 35, netX + 65, netX + 90};
+        
+        // Draw connections first (behind nodes)
+        g2d.setStroke(new BasicStroke(1));
+        
+        // Input to H1
+        for (int i = 0; i < Math.min(inputs.length, 8); i++) {
+            int y1 = netY + 5 + i * 5;
+            for (int j = 0; j < Math.min(h1.length, 8); j++) {
+                int y2 = netY + 5 + j * 5;
+                float activation = (float)Math.abs(inputs[i] * h1[j]);
+                g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+                g2d.drawLine(layerX[0], y1, layerX[1], y2);
+            }
+        }
+        
+        // H1 to H2
+        for (int i = 0; i < Math.min(h1.length, 8); i++) {
+            int y1 = netY + 5 + i * 5;
+            for (int j = 0; j < h2.length; j++) {
+                int y2 = netY + 10 + j * 5;
+                float activation = (float)Math.abs(h1[i] * h2[j]);
+                g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+                g2d.drawLine(layerX[1], y1, layerX[2], y2);
+            }
+        }
+        
+        // H2 to Output
+        for (int i = 0; i < h2.length; i++) {
+            int y1 = netY + 10 + i * 5;
+            int y2 = netY + 23;
+            float activation = (float)Math.abs(h2[i] * output);
+            g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+            g2d.drawLine(layerX[2], y1, layerX[3], y2);
+        }
+        
+        // Draw nodes
+        // Input layer (show first 8)
+        for (int i = 0; i < Math.min(inputs.length, 8); i++) {
+            int y = netY + 5 + i * 5;
+            float val = (float)((inputs[i] + 1) / 2); // Normalize -1 to 1 -> 0 to 1
+            g2d.setColor(new Color(1 - val, val, 0));
+            g2d.fillOval(layerX[0] - 1, y - 1, nodeSize, nodeSize);
+        }
+        
+        // Hidden 1 (show first 8)
+        for (int i = 0; i < Math.min(h1.length, 8); i++) {
+            int y = netY + 5 + i * 5;
+            float val = (float)((h1[i] + 1) / 2);
+            g2d.setColor(new Color(1 - val, val, 0));
+            g2d.fillOval(layerX[1] - 1, y - 1, nodeSize, nodeSize);
+        }
+        
+        // Hidden 2
+        for (int i = 0; i < h2.length; i++) {
+            int y = netY + 10 + i * 5;
+            float val = (float)((h2[i] + 1) / 2);
+            g2d.setColor(new Color(1 - val, val, 0));
+            g2d.fillOval(layerX[2] - 1, y - 1, nodeSize, nodeSize);
+        }
+        
+        // Output
+        int y = netY + 23;
+        float val = (float)output;
+        g2d.setColor(new Color(1 - val, val, 0));
+        g2d.fillOval(layerX[3] - 1, y - 1, nodeSize, nodeSize);
     }
     
     private void drawText(Graphics2D g2d, String text, int x, int y) {

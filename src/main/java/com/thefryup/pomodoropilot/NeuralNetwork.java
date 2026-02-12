@@ -15,6 +15,12 @@ public class NeuralNetwork {
     private double[][] weightsHidden2Output;
     private double[] biasOutput;
     
+    // Store last activations for visualization
+    private double[] lastInputs;
+    private double[] lastHidden1;
+    private double[] lastHidden2;
+    private double lastOutput;
+    
     public NeuralNetwork() {
         Random rand = new Random();
         
@@ -69,33 +75,37 @@ public class NeuralNetwork {
             throw new IllegalArgumentException("Expected " + INPUT_SIZE + " inputs");
         }
         
+        // Store inputs
+        lastInputs = inputs.clone();
+        
         // Hidden layer 1
-        double[] hidden1 = new double[HIDDEN1_SIZE];
+        lastHidden1 = new double[HIDDEN1_SIZE];
         for (int i = 0; i < HIDDEN1_SIZE; i++) {
             double sum = biasHidden1[i];
             for (int j = 0; j < INPUT_SIZE; j++) {
                 sum += inputs[j] * weightsInputHidden1[j][i];
             }
-            hidden1[i] = tanh(sum);
+            lastHidden1[i] = tanh(sum);
         }
         
         // Hidden layer 2
-        double[] hidden2 = new double[HIDDEN2_SIZE];
+        lastHidden2 = new double[HIDDEN2_SIZE];
         for (int i = 0; i < HIDDEN2_SIZE; i++) {
             double sum = biasHidden2[i];
             for (int j = 0; j < HIDDEN1_SIZE; j++) {
-                sum += hidden1[j] * weightsHidden1Hidden2[j][i];
+                sum += lastHidden1[j] * weightsHidden1Hidden2[j][i];
             }
-            hidden2[i] = tanh(sum);
+            lastHidden2[i] = tanh(sum);
         }
         
         // Output layer
-        double output = biasOutput[0];
+        lastOutput = biasOutput[0];
         for (int i = 0; i < HIDDEN2_SIZE; i++) {
-            output += hidden2[i] * weightsHidden2Output[i][0];
+            lastOutput += lastHidden2[i] * weightsHidden2Output[i][0];
         }
         
-        return sigmoid(output);
+        lastOutput = sigmoid(lastOutput);
+        return lastOutput;
     }
     
     private double tanh(double x) {
@@ -220,4 +230,9 @@ public class NeuralNetwork {
         
         return new NeuralNetwork(wih1, bh1, wh1h2, bh2, wh2o, bo);
     }
+    
+    public double[] getLastInputs() { return lastInputs; }
+    public double[] getLastHidden1() { return lastHidden1; }
+    public double[] getLastHidden2() { return lastHidden2; }
+    public double getLastOutput() { return lastOutput; }
 }
