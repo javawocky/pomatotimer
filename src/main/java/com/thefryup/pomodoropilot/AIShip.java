@@ -40,97 +40,33 @@ public class AIShip extends Ship {
     public void think(List<Meteor> meteors) {
         if (!alive) return;
         
-        final double MAX_DETECTION_DISTANCE = 220; // Detection range in pixels
-        
         // Get raycast data (18 rays at 20 degree intervals)
         SpaceRaycast.RayResult[] rays = SpaceRaycast.castRays(this, meteors);
-        
-        // Find closest obstacle (meteor or screen edge)
-        double closestDist = Double.MAX_VALUE;
-        double closestX = 0;
-        double closestY = 0;
-        
-        // Check meteors
-        for (Meteor meteor : meteors) {
-            double dx = meteor.getCenterX() - getCenterX();
-            double dy = meteor.getCenterY() - getCenterY();
-            double dist = Math.sqrt(dx * dx + dy * dy);
-            
-            if (dist < closestDist) {
-                closestDist = dist;
-                closestX = meteor.getCenterX();
-                closestY = meteor.getCenterY();
-            }
-        }
-        
-        // Check screen edges
-        double[] edges = {
-            x,                              // left edge
-            320 - x - getWidth(),           // right edge
-            y,                              // top edge
-            240 - y - getHeight()           // bottom edge
-        };
-        double[] edgeX = {0, 320, getCenterX(), getCenterX()};
-        double[] edgeY = {getCenterY(), getCenterY(), 0, 240};
-        
-        for (int i = 0; i < 4; i++) {
-            if (edges[i] < closestDist) {
-                closestDist = edges[i];
-                closestX = edgeX[i];
-                closestY = edgeY[i];
-            }
-        }
-        
-        // Store for visualization
-        this.closestObstacleX = closestX;
-        this.closestObstacleY = closestY;
-        this.closestObstacleDist = closestDist;
-        
-        // If beyond max detection distance, treat as no obstacle
-        double normalizedDist;
-        double normalizedX;
-        double normalizedY;
-        double normalizedAngle;
-        
-        if (closestDist > MAX_DETECTION_DISTANCE) {
-            // No obstacle detected - all obstacle inputs are 0
-            normalizedDist = 0;
-            normalizedX = 0;
-            normalizedY = 0;
-            normalizedAngle = 0;
-        } else {
-            // Calculate relative position and angle to closest obstacle
-            double dx = closestX - getCenterX();
-            double dy = closestY - getCenterY();
-            double angleToObstacle = Math.atan2(dy, dx);
-            
-            // Normalize inputs
-            normalizedDist = 1.0 - (closestDist / MAX_DETECTION_DISTANCE); // 1 = close, 0 = far
-            normalizedX = dx / 160.0; // -1 to 1
-            normalizedY = dy / 120.0; // -1 to 1
-            normalizedAngle = angleToObstacle / Math.PI; // -1 to 1
-        }
         
         double normalizedVx = getNormalizedVx();
         double normalizedVy = getNormalizedVy();
         
-        // Neural network inputs: [18 raycasts, obstacleX, obstacleY, distance, angle, vx, vy]
-        double[] inputs = new double[24];
+        // Normalize rotation angle to -1 to 1 (0 to 360 degrees)
+        double normalizedAngle = (rotation % 360) / 180.0 - 1.0;
+        
+        // Angular velocity (how fast rotating) - normalize to reasonable range
+        double normalizedAngularVel = angularVelocity / 5.0; // Assuming max ~5 degrees/frame
+        
+        // Neural network inputs: [18 raycasts, vx, vy, angle, angular velocity]
+        double[] inputs = new double[22];
         
         // Raycasts (18 inputs)
         for (int i = 0; i < 18; i++) {
             inputs[i] = rays[i].distance; // Already normalized 0-1
         }
         
-        // Closest obstacle (4 inputs)
-        inputs[18] = normalizedX;
-        inputs[19] = normalizedY;
-        inputs[20] = normalizedDist;
-        inputs[21] = normalizedAngle;
-        
         // Velocity (2 inputs)
-        inputs[22] = normalizedVx;
-        inputs[23] = normalizedVy;
+        inputs[18] = normalizedVx;
+        inputs[19] = normalizedVy;
+        
+        // Rotation state (2 inputs)
+        inputs[20] = normalizedAngle;
+        inputs[21] = normalizedAngularVel;
         
         // Get neural network output
         double[] outputs = brain.predict(inputs);

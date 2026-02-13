@@ -462,25 +462,6 @@ public class SpaceShooterPanel extends JPanel {
             g2d.drawImage(meteor.image, (int)meteor.x, (int)meteor.y, null);
         }
         
-        // Draw closest obstacle lines for all ships if enabled (only in AI mode)
-        if (showRaycasts && !playerMode) {
-            final double MAX_DETECTION_DISTANCE = 220;
-            g2d.setStroke(new BasicStroke(1));
-            for (AIShip ship : evolutionManager.getPopulation()) {
-                if (ship.alive && ship.closestObstacleDist <= MAX_DETECTION_DISTANCE) {
-                    // Color based on distance (red = close, green = far)
-                    float distRatio = (float)(ship.closestObstacleDist / MAX_DETECTION_DISTANCE);
-                    g2d.setColor(new Color(1.0f - distRatio, distRatio, 0, 0.5f));
-                    g2d.drawLine(
-                        (int)ship.getCenterX(), 
-                        (int)ship.getCenterY(),
-                        (int)ship.closestObstacleX,
-                        (int)ship.closestObstacleY
-                    );
-                }
-            }
-        }
-        
         // Draw ships
         if (playerMode && playerShip != null) {
             // Draw player ship
@@ -654,10 +635,10 @@ public class SpaceShooterPanel extends JPanel {
         
         double[] inputs = best.brain.getLastInputs();
         double[] h1 = best.brain.getLastHidden1();
-        double[] h2 = best.brain.getLastHidden2();
-        double[] outputs = best.brain.getLastOutputs();
+        double[] recurrent = best.brain.getLastRecurrent();
+        double[] outputs = best.brain.getLastOutput();
         
-        if (outputs == null || outputs.length < 3 || inputs.length < 24) return;
+        if (outputs == null || outputs.length < 3 || inputs.length < 22) return;
         
         int nodeSize = 3;
         int[] layerX = {netX + 8, netX + 35, netX + 62, netX + 90};
@@ -667,7 +648,7 @@ public class SpaceShooterPanel extends JPanel {
         // Draw connections (simplified - just show strong ones)
         final float threshold = 0.05f;
         
-        // Input to H1 (show first 8 of 24 inputs - raycasts)
+        // Input to H1 (show first 8 of 22 inputs - raycasts)
         for (int i = 0; i < Math.min(8, inputs.length); i++) {
             int y1 = netY + 5 + i * 5;
             double input = inputs[i];
@@ -681,34 +662,34 @@ public class SpaceShooterPanel extends JPanel {
             }
         }
         
-        // H1 to H2 (8 h1 nodes to 8 h2 nodes)
+        // H1 to Recurrent (8 h1 nodes to 6 recurrent nodes)
         for (int i = 0; i < Math.min(8, h1.length); i++) {
             int y1 = netY + 5 + i * 5;
             double h1Val = h1[i];
-            for (int j = 0; j < Math.min(8, h2.length); j++) {
-                float activation = (float)Math.abs(h1Val * h2[j]);
+            for (int j = 0; j < Math.min(6, recurrent.length); j++) {
+                float activation = (float)Math.abs(h1Val * recurrent[j]);
                 if (activation > threshold) {
-                    int y2 = netY + 5 + j * 5;
+                    int y2 = netY + 8 + j * 6;
                     g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
                     g2d.drawLine(layerX[1], y1, layerX[2], y2);
                 }
             }
         }
         
-        // H2 to Outputs (3 outputs: left, right, thrust)
+        // Recurrent to Outputs (3 outputs: left, right, thrust)
         for (int out = 0; out < 3; out++) {
             int y2 = netY + 15 + out * 10;
-            for (int i = 0; i < Math.min(8, h2.length); i++) {
-                float activation = (float)Math.abs(h2[i]);
+            for (int i = 0; i < Math.min(6, recurrent.length); i++) {
+                float activation = (float)Math.abs(recurrent[i]);
                 if (activation > threshold) {
-                    int y1 = netY + 5 + i * 5;
+                    int y1 = netY + 8 + i * 6;
                     g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
                     g2d.drawLine(layerX[2], y1, layerX[3], y2);
                 }
             }
         }
         
-        // Draw nodes - Input layer (first 8 of 24 - raycasts)
+        // Draw nodes - Input layer (first 8 of 22 - raycasts)
         for (int i = 0; i < Math.min(8, inputs.length); i++) {
             int y = netY + 5 + i * 5;
             float val = (float)inputs[i]; // Raycasts are already 0-1
@@ -724,11 +705,11 @@ public class SpaceShooterPanel extends JPanel {
             g2d.fillOval(layerX[1] - 1, y - 1, nodeSize, nodeSize);
         }
         
-        // Hidden layer 2 (first 8 nodes)
-        for (int i = 0; i < Math.min(8, h2.length); i++) {
-            int y = netY + 5 + i * 5;
-            float val = (float)((h2[i] + 1) * 0.5);
-            g2d.setColor(new Color(1 - val, val, 0));
+        // Recurrent layer (6 nodes) - draw with blue tint to show it's special
+        for (int i = 0; i < Math.min(6, recurrent.length); i++) {
+            int y = netY + 8 + i * 6;
+            float val = (float)((recurrent[i] + 1) * 0.5);
+            g2d.setColor(new Color(1 - val, val * 0.7f, val * 0.3f)); // Slight blue tint
             g2d.fillOval(layerX[2] - 1, y - 1, nodeSize, nodeSize);
         }
         
@@ -752,13 +733,5 @@ public class SpaceShooterPanel extends JPanel {
             g2d.setFont(new Font("Arial", Font.PLAIN, 6));
             g2d.drawString(labels[i], layerX[3] + 5, y + 2);
         }
-        
-        // Draw layer size labels at bottom
-        g2d.setColor(new Color(255, 255, 255, 150));
-        g2d.setFont(new Font("Arial", Font.PLAIN, 5));
-        g2d.drawString("24", layerX[0] - 3, netY + 50);
-        g2d.drawString("16", layerX[1] - 3, netY + 50);
-        g2d.drawString("12", layerX[2] - 3, netY + 50);
-        g2d.drawString("3", layerX[3] - 1, netY + 50);
     }
 }

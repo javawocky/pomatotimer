@@ -123,7 +123,7 @@ public class SpaceEvolutionManager {
             SpaceNeuralNetwork childBrain = SpaceNeuralNetwork.crossover(parent1.brain, parent2.brain, rand);
             
             // Mutate
-            childBrain.mutate(MUTATION_RATE, rand);
+            childBrain.mutate(MUTATION_RATE);
             
             // Create child
             int colorIndex = nextGen.size() % 4;
