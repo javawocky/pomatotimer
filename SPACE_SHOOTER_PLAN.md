@@ -130,21 +130,41 @@ Create a top-down space shooter game mode using Kenney's Space Shooter Redux ass
 - [ ] Verify Pomodoro timer accuracy
 - [ ] Cross-platform testing (macOS/Linux/Windows)
 
-## Asset Inventory
-Available from `images/SpaceShooter/`:
-- **Backgrounds/**: Space backgrounds for scrolling
-- **PNG/**: Individual sprite files (ships, bullets, enemies, effects)
-- **Bonus/**: Additional effects and animations
-- **Spritesheet/**: Sprite sheets for efficient loading
+## Asset Strategy
+
+### Reuse from Plane Game (Shared Code)
+- **Neural Network** - NeuralNetwork.java (adapt inputs/outputs)
+- **Evolution Manager** - EvolutionManager.java (reuse genetic algorithm)
+- **High Score System** - Existing high score tracking and display
+- **Alarm/Sound System** - Existing alarm for timer
+- **Text Rendering** - Existing letter/number image system OR use Space Shooter UI numerals
+- **Timer System** - Pomodoro timer logic
+- **Optimization Techniques** - Caching, rendering optimizations
+
+### Space Shooter Pack Assets (No Plane Game Assets)
+- **UI Elements** - Use PNG/UI/ folder (numerals, buttons, life icons, cursor)
+- **Player Ships** - PNG/playerShip*.png (blue, green, orange, red variants)
+- **Enemies** - PNG/Enemies/ folder (black, blue, green, red enemy ships)
+- **Lasers/Bullets** - PNG/Lasers/ folder (blue, green, red lasers)
+- **Backgrounds** - Backgrounds/ folder (black, blue, darkPurple, purple space)
+- **Effects** - PNG/Effects/ (explosions, shields, stars, fire animations)
+- **Power-ups** - PNG/Power-ups/ (optional for future features)
+- **Meteors** - PNG/Meteors/ (optional obstacles)
+- **Sound Effects** - Bonus/ folder (laser, shield, lose sounds)
+
+### No Asset Sharing
+- Space shooter will be completely self-contained with its own assets
+- Can run independently without plane game resources
+- Text/UI uses Space Shooter pack numerals and UI elements
 
 ## Technical Considerations
-- Reuse existing GamePanel architecture
-- Create new SpaceShooterPanel class or mode switch in GamePanel
-- Leverage existing optimization techniques (caching, night filter, etc.)
+- Reuse existing GamePanel architecture OR create SpaceShooterPanel class
+- Leverage existing optimization techniques (caching, rendering, etc.)
 - Maintain 320x240 native resolution with scaling
 - 60 FPS target
-- Keep existing high score system
 - Reuse neural network and evolution manager with adapted inputs/outputs
+- Keep existing high score system (code only, use space shooter UI assets)
+- Use Space Shooter sound effects instead of plane game sounds
 
 ## Success Criteria
 - Fun and engaging gameplay in manual mode
