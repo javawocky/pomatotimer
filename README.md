@@ -1,8 +1,16 @@
 # Pomodoro Pilot
 
-A Pomodoro timer with an integrated Flappy Bird-style game to keep you focused during work sessions.
+A Pomodoro timer with integrated AI-powered games to keep you focused during work sessions.
 
 ![Pomodoro Pilot Intro](screenshots/intro.png)
+
+## Game Modes
+
+### Plane Game (Flappy Bird Style)
+Navigate through mountain obstacles with AI-controlled planes learning through neural networks and genetic algorithms.
+
+### Space Shooter (Coming Soon)
+Asteroids-style physics game where AI ships dodge falling meteors using rotation and thrust controls.
 
 ## Quick Start
 
@@ -40,11 +48,16 @@ java -jar PomatoTimer.jar 50 10  # 50 min work, 10 min break
 
 ## How to Play
 
-### Game Modes
+### Game Selection
+- On startup, choose between Plane Game or Space Shooter
+- Use arrow keys to select, Enter to confirm
+- Auto-selects Plane Game after 10 seconds
+
+### Plane Game
 
 **Work Phase (AI Mode)**
-- The game starts with AI controlling the plane using neural networks and genetic algorithms
-- Watch multiple AI planes learn to navigate through obstacles automatically
+- The game starts with AI controlling planes using neural networks and genetic algorithms
+- Watch 15 AI planes learn to navigate through obstacles automatically
 - Press **A** to toggle between AI learning mode and classic mode
 - Press **T** to enable turbo mode for faster AI training
 - Press **R** to visualize the AI's raycast sensors (color-coded by distance)
