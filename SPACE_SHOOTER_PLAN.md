@@ -49,6 +49,24 @@ Create a top-down space shooter with Asteroids-style physics where AI-controlled
 - **Raycasts**: Only visible when hitting meteors (toggle with 'R')
 - **UI**: Space Shooter UI assets (PNG/UI/ numerals, icons)
 
+## Phase 0: Game Selection Screen
+
+### 0.1 Selection UI
+- [ ] Create game selection screen (shows before timer starts)
+- [ ] Display plane icon (from plane game assets)
+- [ ] Display spaceship icon (from space shooter assets)
+- [ ] Orange square highlight around selected option
+- [ ] Default selection: Plane game
+- [ ] Arrow keys or mouse to change selection
+- [ ] Enter/Space or click to confirm selection
+- [ ] Auto-select default after 10 seconds of no input
+- [ ] Fade transition to selected game
+
+### 0.2 Game Mode Management
+- [ ] Store selected game mode
+- [ ] Initialize appropriate game panel based on selection
+- [ ] Allow restart/return to selection (optional)
+
 ## Phase 1: Core Game Mechanics
 
 ### 1.1 Ship Physics & Movement
