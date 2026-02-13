@@ -7,7 +7,7 @@ import java.util.Random;
 
 public class SpaceEvolutionManager {
     private static final int POPULATION_SIZE = 10;
-    private static final double MUTATION_RATE = 0.15;
+    private static final double MUTATION_RATE = 0.2; // Increased from 0.15 for more exploration
     private static final int MAX_HISTORY = 30; // Keep last 30 generations
     
     private List<AIShip> population;
@@ -108,9 +108,10 @@ public class SpaceEvolutionManager {
         // Create next generation
         List<AIShip> nextGen = new ArrayList<>();
         
-        // Keep top 2 elites
+        // Keep top 3 elites (20% of population)
         nextGen.add(new AIShip(startX, startY, 0, population.get(0).brain.clone()));
         nextGen.add(new AIShip(startX, startY, 1, population.get(1).brain.clone()));
+        nextGen.add(new AIShip(startX, startY, 2, population.get(2).brain.clone()));
         
         // Fill rest with crossover and mutation
         while (nextGen.size() < POPULATION_SIZE) {

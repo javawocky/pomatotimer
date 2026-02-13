@@ -39,6 +39,16 @@ public class SpaceShooterPanel extends JPanel {
     private int fastForwardTarget = 0;
     private boolean rightArrowReleased = true;
     
+    // Player mode
+    private boolean playerMode = false;
+    private Ship playerShip;
+    
+    // Visualization caching
+    private BufferedImage cachedFitnessGraph = null;
+    private BufferedImage cachedNeuralNetwork = null;
+    private int visualizationUpdateCounter = 0;
+    private static final int VISUALIZATION_UPDATE_INTERVAL = 60; // Update once per second at 60fps
+    
     public SpaceShooterPanel() {
         setPreferredSize(new Dimension(320, 240));
         setBackground(Color.BLACK);
@@ -78,12 +88,22 @@ public class SpaceShooterPanel extends JPanel {
                     turboMode = !turboMode;
                     System.out.println("Turbo Mode: " + (turboMode ? "ON" : "OFF"));
                 }
-                if (e.getKeyCode() == KeyEvent.VK_RIGHT && rightArrowReleased) {
+                if (e.getKeyCode() == KeyEvent.VK_SPACE && !playerMode) {
+                    // Enter player mode
+                    playerMode = true;
+                    playerShip = new Ship(160, 160, 0);
+                    // Kill all AI ships so they don't interfere
+                    for (AIShip ship : evolutionManager.getPopulation()) {
+                        ship.alive = false;
+                    }
+                    System.out.println("Player mode activated!");
+                }
+                if (e.getKeyCode() == KeyEvent.VK_RIGHT && rightArrowReleased && !playerMode) {
                     if (!fastForwardMode) {
                         fastForwardMode = true;
-                        fastForwardTarget = evolutionManager.getGeneration() + 50;
+                        fastForwardTarget = evolutionManager.getGeneration() + 1000;
                         rightArrowReleased = false;
-                        System.out.println("Fast forwarding 50 generations to gen " + fastForwardTarget);
+                        System.out.println("Fast forwarding 1000 generations to gen " + fastForwardTarget);
                     }
                 }
             }
@@ -197,19 +217,56 @@ public class SpaceShooterPanel extends JPanel {
         frameCounter++;
         spawnTimer++;
         
-        // Handle game over state (all ships dead)
-        if (evolutionManager.allDead()) {
-            gameOverTimer++;
-            if (gameOverTimer > 90) { // 1.5 seconds at 60 FPS
-                restartGame();
+        if (playerMode) {
+            // Player mode - control single ship
+            // Reset game over timer since we're in player mode
+            gameOverTimer = 0;
+            
+            double rotationInput = 0;
+            if (leftPressed) rotationInput = -1;
+            if (rightPressed) rotationInput = 1;
+            
+            boolean wasAlive = playerShip.alive;
+            playerShip.update(rotationInput, thrustPressed);
+            
+            // Check if died from update (edges or rotation)
+            if (wasAlive && !playerShip.alive) {
+                System.out.println("Player died during update! Position: (" + playerShip.x + ", " + playerShip.y + ") Rotation accumulator: " + playerShip.rotationAccumulator);
             }
-            return; // Don't update anything else when all dead
-        }
-        
-        // All AI ships think and act
-        for (AIShip ship : evolutionManager.getPopulation()) {
-            if (ship.alive) {
-                ship.think(meteors);
+            
+            // Check collision with meteors
+            for (Meteor meteor : meteors) {
+                if (playerShip.alive && checkCollision(playerShip, meteor)) {
+                    playerShip.alive = false;
+                    System.out.println("Player died! Hit meteor at (" + meteor.x + ", " + meteor.y + ")");
+                    break;
+                }
+            }
+            
+            // If player died, return to AI mode
+            if (!playerShip.alive) {
+                playerMode = false;
+                playerShip = null;
+                // Restart the game to get fresh AI ships
+                restartGame();
+                return; // Exit update early
+            }
+        } else {
+            // AI mode
+            // Handle game over state (all ships dead)
+            if (evolutionManager.allDead()) {
+                gameOverTimer++;
+                if (gameOverTimer > 90) { // 1.5 seconds at 60 FPS
+                    restartGame();
+                }
+                return; // Don't update anything else when all dead
+            }
+            
+            // All AI ships think and act
+            for (AIShip ship : evolutionManager.getPopulation()) {
+                if (ship.alive) {
+                    ship.think(meteors);
+                }
             }
         }
         
@@ -218,8 +275,8 @@ public class SpaceShooterPanel extends JPanel {
         int secondsElapsed = frameCounter / 60;
         
         // Spawn interval decreases over time (1.1x faster)
-        // Reaches minimum (30 frames) at ~164 seconds instead of 180
-        int spawnInterval = Math.max(30, 120 - (int)(secondsElapsed * 0.55));
+        // Reduced by 10% from previous rate (55 instead of 50)
+        int spawnInterval = Math.max(30, 55 - (int)(secondsElapsed * 0.55));
         
         if (spawnTimer >= spawnInterval) {
             spawnMeteor(secondsElapsed);
@@ -230,36 +287,37 @@ public class SpaceShooterPanel extends JPanel {
         for (Meteor meteor : meteors) {
             meteor.update();
             
-            // Award points when meteor exits bottom (to all alive ships)
-            if (!meteor.scored && meteor.y > 240) {
-                meteor.scored = true;
-                for (AIShip ship : evolutionManager.getPopulation()) {
-                    if (ship.alive) {
-                        ship.addScore(10);
+            if (playerMode) {
+                // Award points to player
+                if (!meteor.scored && meteor.y > 240) {
+                    meteor.scored = true;
+                    // Could track player score here if needed
+                }
+            } else {
+                // Award points when meteor exits bottom (to all alive ships)
+                if (!meteor.scored && meteor.y > 240) {
+                    meteor.scored = true;
+                    for (AIShip ship : evolutionManager.getPopulation()) {
+                        if (ship.alive) {
+                            ship.addScore(10);
+                        }
                     }
                 }
             }
         }
         
-        // Check collisions for all ships
-        double hitboxShrink = 0.1;
-        
-        for (AIShip ship : evolutionManager.getPopulation()) {
-            if (!ship.alive) continue;
+        // Check collisions (only for AI ships in AI mode)
+        if (!playerMode) {
+            double hitboxShrink = 0.1;
             
-            double shipHitX = ship.x + ship.getWidth() * hitboxShrink;
-            double shipHitY = ship.y + ship.getHeight() * hitboxShrink;
-            double shipHitW = ship.getWidth() * 0.8;
-            double shipHitH = ship.getHeight() * 0.8;
-            
-            for (Meteor meteor : meteors) {
-                if (shipHitX < meteor.x + meteor.width &&
-                    shipHitX + shipHitW > meteor.x &&
-                    shipHitY < meteor.y + meteor.height &&
-                    shipHitY + shipHitH > meteor.y) {
-                    
-                    ship.alive = false;
-                    break;
+            for (AIShip ship : evolutionManager.getPopulation()) {
+                if (!ship.alive) continue;
+                
+                for (Meteor meteor : meteors) {
+                    if (checkCollision(ship, meteor)) {
+                        ship.alive = false;
+                        break;
+                    }
                 }
             }
         }
@@ -294,20 +352,53 @@ public class SpaceShooterPanel extends JPanel {
         score = 0;
     }
     
+    private boolean checkCollision(Ship ship, Meteor meteor) {
+        double hitboxShrink = 0.1;
+        double shipHitX = ship.x + ship.getWidth() * hitboxShrink;
+        double shipHitY = ship.y + ship.getHeight() * hitboxShrink;
+        double shipHitW = ship.getWidth() * 0.8;
+        double shipHitH = ship.getHeight() * 0.8;
+        
+        return shipHitX < meteor.x + meteor.width &&
+               shipHitX + shipHitW > meteor.x &&
+               shipHitY < meteor.y + meteor.height &&
+               shipHitY + shipHitH > meteor.y;
+    }
+    
     private void spawnMeteor(int secondsElapsed) {
         int type = rand.nextInt(meteorImages.length);
         BufferedImage img = meteorImages[type];
-        double x = rand.nextDouble() * (320 - img.getWidth());
-        double y = -img.getHeight();
         
-        // Horizontal drift stays constant
-        double vx = (rand.nextDouble() - 0.5) * 0.3;
+        // Randomly choose spawn side: 0=top, 1=bottom, 2=left, 3=right
+        int side = rand.nextInt(4);
+        double x, y, vx, vy;
         
-        // Downward speed increases over time (1.1x faster)
-        // Reaches max speed at ~164 seconds instead of 180
-        double baseSpeed = 0.5 + (secondsElapsed / 164.0) * 1.0;
-        double speedVariation = 0.3 + (secondsElapsed / 164.0) * 0.5;
-        double vy = baseSpeed + rand.nextDouble() * speedVariation;
+        switch (side) {
+            case 0: // Top
+                x = rand.nextDouble() * (320 - img.getWidth());
+                y = -img.getHeight();
+                vx = (rand.nextDouble() - 0.5) * 0.3;
+                vy = 0.5 + (secondsElapsed / 164.0) * 1.0 + rand.nextDouble() * (0.3 + (secondsElapsed / 164.0) * 0.5);
+                break;
+            case 1: // Bottom
+                x = rand.nextDouble() * (320 - img.getWidth());
+                y = 240;
+                vx = (rand.nextDouble() - 0.5) * 0.3;
+                vy = -(0.5 + (secondsElapsed / 164.0) * 1.0 + rand.nextDouble() * (0.3 + (secondsElapsed / 164.0) * 0.5));
+                break;
+            case 2: // Left
+                x = -img.getWidth();
+                y = rand.nextDouble() * (240 - img.getHeight());
+                vx = 0.5 + (secondsElapsed / 164.0) * 1.0 + rand.nextDouble() * (0.3 + (secondsElapsed / 164.0) * 0.5);
+                vy = (rand.nextDouble() - 0.5) * 0.3;
+                break;
+            default: // Right
+                x = 320;
+                y = rand.nextDouble() * (240 - img.getHeight());
+                vx = -(0.5 + (secondsElapsed / 164.0) * 1.0 + rand.nextDouble() * (0.3 + (secondsElapsed / 164.0) * 0.5));
+                vy = (rand.nextDouble() - 0.5) * 0.3;
+                break;
+        }
         
         meteors.add(new Meteor(x, y, vx, vy, img, type));
     }
@@ -373,37 +464,96 @@ public class SpaceShooterPanel extends JPanel {
             g2d.drawImage(meteor.image, (int)meteor.x, (int)meteor.y, null);
         }
         
-        // Draw raycasts for all ships if enabled
-        if (showRaycasts) {
+        // Draw closest obstacle lines for all ships if enabled (only in AI mode)
+        if (showRaycasts && !playerMode) {
+            final double MAX_DETECTION_DISTANCE = 220;
+            g2d.setStroke(new BasicStroke(1));
             for (AIShip ship : evolutionManager.getPopulation()) {
-                if (ship.alive) {
-                    SpaceRaycast.RayResult[] rays = SpaceRaycast.castRays(ship, meteors);
-                    SpaceRaycast.drawRays(g2d, ship, rays);
+                if (ship.alive && ship.closestObstacleDist <= MAX_DETECTION_DISTANCE) {
+                    // Color based on distance (red = close, green = far)
+                    float distRatio = (float)(ship.closestObstacleDist / MAX_DETECTION_DISTANCE);
+                    g2d.setColor(new Color(1.0f - distRatio, distRatio, 0, 0.5f));
+                    g2d.drawLine(
+                        (int)ship.getCenterX(), 
+                        (int)ship.getCenterY(),
+                        (int)ship.closestObstacleX,
+                        (int)ship.closestObstacleY
+                    );
                 }
             }
         }
         
-        // Draw all alive ships
-        for (AIShip ship : evolutionManager.getPopulation()) {
-            if (ship.alive) {
-                drawRotatedShip(g2d, ship);
+        // Draw ships
+        if (playerMode && playerShip != null) {
+            // Draw player ship
+            drawRotatedShip(g2d, playerShip);
+        } else {
+            // Draw all alive AI ships
+            for (AIShip ship : evolutionManager.getPopulation()) {
+                if (ship.alive) {
+                    drawRotatedShip(g2d, ship);
+                }
             }
         }
         
         // Draw debug info
         g2d.setColor(Color.WHITE);
-        g2d.drawString("Gen: " + evolutionManager.getGeneration(), 10, 20);
-        g2d.drawString("Alive: " + evolutionManager.getAliveCount(), 10, 35);
-        g2d.drawString("Best Score: " + evolutionManager.getBestScoreThisGen(), 10, 50);
-        g2d.drawString("High Score: " + evolutionManager.getBestScoreEver(), 10, 65);
-        g2d.drawString("Time: " + (frameCounter / 60) + "s", 10, 80);
-        g2d.drawString("Meteors: " + meteors.size(), 10, 95);
+        if (playerMode) {
+            g2d.drawString("PLAYER MODE", 10, 20);
+            g2d.drawString("Time: " + (frameCounter / 60) + "s", 10, 35);
+            g2d.drawString("Meteors: " + meteors.size(), 10, 50);
+        } else {
+            g2d.drawString("Gen: " + evolutionManager.getGeneration(), 10, 20);
+            g2d.drawString("Alive: " + evolutionManager.getAliveCount(), 10, 35);
+            g2d.drawString("Best Score: " + evolutionManager.getBestScoreThisGen(), 10, 50);
+            g2d.drawString("High Score: " + evolutionManager.getBestScoreEver(), 10, 65);
+            g2d.drawString("Time: " + (frameCounter / 60) + "s", 10, 80);
+            g2d.drawString("Meteors: " + meteors.size(), 10, 95);
+        }
         
-        // Draw fitness graph (bottom-left)
-        drawFitnessGraph(g2d);
-        
-        // Draw neural network visualization (bottom-right)
-        drawNeuralNetwork(g2d);
+        // Draw fitness graph and neural network (only in AI mode and not in fast forward)
+        if (!playerMode && !fastForwardMode) {
+            visualizationUpdateCounter++;
+            
+            // Regenerate cached images once per second
+            if (visualizationUpdateCounter >= VISUALIZATION_UPDATE_INTERVAL) {
+                visualizationUpdateCounter = 0;
+                
+                // Create fitness graph cache at 2x resolution for better quality
+                if (cachedFitnessGraph == null) {
+                    cachedFitnessGraph = new BufferedImage(230, 126, BufferedImage.TYPE_INT_ARGB);
+                }
+                Graphics2D gFit = cachedFitnessGraph.createGraphics();
+                gFit.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                gFit.scale(2.0, 2.0); // Scale up for higher resolution
+                gFit.setComposite(AlphaComposite.Clear);
+                gFit.fillRect(0, 0, 115, 63);
+                gFit.setComposite(AlphaComposite.SrcOver);
+                drawFitnessGraphToImage(gFit);
+                gFit.dispose();
+                
+                // Create neural network cache at 2x resolution for better quality
+                if (cachedNeuralNetwork == null) {
+                    cachedNeuralNetwork = new BufferedImage(230, 126, BufferedImage.TYPE_INT_ARGB);
+                }
+                Graphics2D gNet = cachedNeuralNetwork.createGraphics();
+                gNet.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                gNet.scale(2.0, 2.0); // Scale up for higher resolution
+                gNet.setComposite(AlphaComposite.Clear);
+                gNet.fillRect(0, 0, 115, 63);
+                gNet.setComposite(AlphaComposite.SrcOver);
+                drawNeuralNetworkToImage(gNet);
+                gNet.dispose();
+            }
+            
+            // Draw cached images scaled back down
+            if (cachedFitnessGraph != null) {
+                g2d.drawImage(cachedFitnessGraph, 5, 172, 115, 63, null);
+            }
+            if (cachedNeuralNetwork != null) {
+                g2d.drawImage(cachedNeuralNetwork, 200, 172, 115, 63, null);
+            }
+        }
     }
     
     private void drawRotatedShip(Graphics2D g2d, Ship ship) {
@@ -430,12 +580,12 @@ public class SpaceShooterPanel extends JPanel {
         g2d.setTransform(oldTransform);
     }
     
-    private void drawFitnessGraph(Graphics2D g2d) {
+    private void drawFitnessGraphToImage(Graphics2D g2d) {
         List<Double> history = evolutionManager.getFitnessHistory();
         if (history.isEmpty()) return;
         
-        int graphX = 10;
-        int graphY = 177;
+        int graphX = 5;
+        int graphY = 5;
         int graphWidth = 105;
         int graphHeight = 53;
         
@@ -489,12 +639,12 @@ public class SpaceShooterPanel extends JPanel {
         }
     }
     
-    private void drawNeuralNetwork(Graphics2D g2d) {
+    private void drawNeuralNetworkToImage(Graphics2D g2d) {
         AIShip best = evolutionManager.getBestShip();
         if (best == null || best.brain.getLastInputs() == null) return;
         
-        int netX = 205;
-        int netY = 177;
+        int netX = 5;
+        int netY = 5;
         int netWidth = 105;
         int netHeight = 53;
         
@@ -505,25 +655,26 @@ public class SpaceShooterPanel extends JPanel {
         g2d.drawRect(netX, netY, netWidth, netHeight);
         
         double[] inputs = best.brain.getLastInputs();
-        double[] hidden = best.brain.getLastHidden();
+        double[] h1 = best.brain.getLastHidden1();
+        double[] h2 = best.brain.getLastHidden2();
         double[] outputs = best.brain.getLastOutputs();
         
-        if (outputs == null || outputs.length < 3) return;
+        if (outputs == null || outputs.length < 3 || inputs.length < 24) return;
         
         int nodeSize = 3;
-        int[] layerX = {netX + 10, netX + 50, netX + 90};
+        int[] layerX = {netX + 8, netX + 35, netX + 62, netX + 90};
         
         g2d.setStroke(new BasicStroke(1));
         
         // Draw connections (simplified - just show strong ones)
         final float threshold = 0.05f;
         
-        // Input to Hidden (first 8 raycasts)
+        // Input to H1 (show first 8 of 24 inputs - raycasts)
         for (int i = 0; i < Math.min(8, inputs.length); i++) {
             int y1 = netY + 5 + i * 5;
             double input = inputs[i];
-            for (int j = 0; j < Math.min(8, hidden.length); j++) {
-                float activation = (float)Math.abs(input * hidden[j]);
+            for (int j = 0; j < Math.min(8, h1.length); j++) {
+                float activation = (float)Math.abs(input * h1[j]);
                 if (activation > threshold) {
                     int y2 = netY + 5 + j * 5;
                     g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
@@ -532,33 +683,55 @@ public class SpaceShooterPanel extends JPanel {
             }
         }
         
-        // Hidden to Outputs (3 outputs: left, right, thrust)
-        for (int out = 0; out < 3; out++) {
-            int y2 = netY + 15 + out * 10;
-            for (int i = 0; i < Math.min(8, hidden.length); i++) {
-                float activation = (float)Math.abs(hidden[i]);
+        // H1 to H2 (8 h1 nodes to 8 h2 nodes)
+        for (int i = 0; i < Math.min(8, h1.length); i++) {
+            int y1 = netY + 5 + i * 5;
+            double h1Val = h1[i];
+            for (int j = 0; j < Math.min(8, h2.length); j++) {
+                float activation = (float)Math.abs(h1Val * h2[j]);
                 if (activation > threshold) {
-                    int y1 = netY + 5 + i * 5;
+                    int y2 = netY + 5 + j * 5;
                     g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
                     g2d.drawLine(layerX[1], y1, layerX[2], y2);
                 }
             }
         }
         
-        // Draw nodes - Input layer (first 8 raycasts)
+        // H2 to Outputs (3 outputs: left, right, thrust)
+        for (int out = 0; out < 3; out++) {
+            int y2 = netY + 15 + out * 10;
+            for (int i = 0; i < Math.min(8, h2.length); i++) {
+                float activation = (float)Math.abs(h2[i]);
+                if (activation > threshold) {
+                    int y1 = netY + 5 + i * 5;
+                    g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
+                    g2d.drawLine(layerX[2], y1, layerX[3], y2);
+                }
+            }
+        }
+        
+        // Draw nodes - Input layer (first 8 of 24 - raycasts)
         for (int i = 0; i < Math.min(8, inputs.length); i++) {
             int y = netY + 5 + i * 5;
-            float val = (float)inputs[i];
+            float val = (float)inputs[i]; // Raycasts are already 0-1
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[0] - 1, y - 1, nodeSize, nodeSize);
         }
         
-        // Hidden layer (first 8)
-        for (int i = 0; i < Math.min(8, hidden.length); i++) {
+        // Hidden layer 1 (first 8 nodes)
+        for (int i = 0; i < Math.min(8, h1.length); i++) {
             int y = netY + 5 + i * 5;
-            float val = (float)((hidden[i] + 1) * 0.5);
+            float val = (float)((h1[i] + 1) * 0.5);
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[1] - 1, y - 1, nodeSize, nodeSize);
+        }
+        
+        // Hidden layer 2 (first 8 nodes)
+        for (int i = 0; i < Math.min(8, h2.length); i++) {
+            int y = netY + 5 + i * 5;
+            float val = (float)((h2[i] + 1) * 0.5);
+            g2d.setColor(new Color(1 - val, val, 0));
+            g2d.fillOval(layerX[2] - 1, y - 1, nodeSize, nodeSize);
         }
         
         // Outputs (left, right, thrust)
@@ -567,19 +740,27 @@ public class SpaceShooterPanel extends JPanel {
             int y = netY + 15 + i * 10;
             float val = (float)outputs[i];
             g2d.setColor(new Color(1 - val, val, 0));
-            g2d.fillOval(layerX[2] - 1, y - 1, nodeSize, nodeSize);
+            g2d.fillOval(layerX[3] - 1, y - 1, nodeSize, nodeSize);
             
             // Draw green ring if activated (> 0.5)
             if (outputs[i] > 0.5) {
                 g2d.setColor(Color.GREEN);
                 g2d.setStroke(new BasicStroke(0.8f));
-                g2d.drawOval(layerX[2] - 2, y - 2, nodeSize + 2, nodeSize + 2);
+                g2d.drawOval(layerX[3] - 2, y - 2, nodeSize + 2, nodeSize + 2);
             }
             
             // Label
             g2d.setColor(Color.WHITE);
             g2d.setFont(new Font("Arial", Font.PLAIN, 6));
-            g2d.drawString(labels[i], layerX[2] + 5, y + 2);
+            g2d.drawString(labels[i], layerX[3] + 5, y + 2);
         }
+        
+        // Draw layer size labels at bottom
+        g2d.setColor(new Color(255, 255, 255, 150));
+        g2d.setFont(new Font("Arial", Font.PLAIN, 5));
+        g2d.drawString("24", layerX[0] - 3, netY + 50);
+        g2d.drawString("16", layerX[1] - 3, netY + 50);
+        g2d.drawString("12", layerX[2] - 3, netY + 50);
+        g2d.drawString("3", layerX[3] - 1, netY + 50);
     }
 }

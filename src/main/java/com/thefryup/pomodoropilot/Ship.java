@@ -9,6 +9,10 @@ public class Ship {
     public boolean alive;
     public int colorIndex;        // 0-3 for different ship colors
     
+    public double rotationAccumulator; // Track total rotation in current direction (public for debug)
+    private double lastRotation;
+    private static final double MAX_CONTINUOUS_ROTATION = 1080.0; // 3 full rotations (3 * 360)
+    
     private static final double ROTATION_SPEED = 4.0;      // Degrees per frame
     private static final double THRUST_POWER = 0.125;      // Acceleration when thrusting (50% of original)
     private static final double MAX_VELOCITY = 3.0;        // Maximum speed (50% of original)
@@ -27,6 +31,8 @@ public class Ship {
         this.thrusting = false;
         this.alive = true;
         this.colorIndex = colorIndex;
+        this.rotationAccumulator = 0;
+        this.lastRotation = 0;
     }
     
     public void update(double rotationInput, boolean thrustInput) {
@@ -34,6 +40,26 @@ public class Ship {
         
         // Apply rotation input (-1 = left, 0 = none, 1 = right)
         angularVelocity = rotationInput * ROTATION_SPEED;
+        
+        // Track rotation accumulator
+        double rotationDelta = angularVelocity;
+        
+        // If not rotating, reset accumulator
+        if (rotationInput == 0) {
+            rotationAccumulator = 0;
+        } else if ((rotationInput > 0 && rotationAccumulator >= 0) || (rotationInput < 0 && rotationAccumulator <= 0)) {
+            // Continuing in same direction - accumulate
+            rotationAccumulator += rotationDelta;
+        } else {
+            // Changed direction - reset and start accumulating in new direction
+            rotationAccumulator = rotationDelta;
+        }
+        
+        // Die if rotated too much continuously (3 full rotations)
+        if (Math.abs(rotationAccumulator) > MAX_CONTINUOUS_ROTATION) {
+            alive = false;
+        }
+        
         rotation += angularVelocity;
         
         // Normalize rotation to 0-360

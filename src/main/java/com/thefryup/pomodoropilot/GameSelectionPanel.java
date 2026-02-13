@@ -5,7 +5,7 @@ import java.awt.*;
 import java.awt.event.*;
 
 public class GameSelectionPanel extends JPanel {
-    private int selectedGame = 0; // 0 = Plane Game, 1 = Space Shooter
+    private int selectedGame = 1; // 0 = Plane Game, 1 = Space Shooter (default)
     private long startTime;
     private static final int AUTO_SELECT_SECONDS = 10;
     private boolean selectionMade = false;
@@ -39,7 +39,7 @@ public class GameSelectionPanel extends JPanel {
         Timer timer = new Timer(100, e -> {
             long elapsed = (System.currentTimeMillis() - startTime) / 1000;
             if (elapsed >= AUTO_SELECT_SECONDS && !selectionMade) {
-                selectedGame = 0; // Auto-select Plane Game
+                selectedGame = 1; // Auto-select Space Shooter
                 makeSelection();
             }
             repaint();
@@ -114,7 +114,7 @@ public class GameSelectionPanel extends JPanel {
         long elapsed = (System.currentTimeMillis() - startTime) / 1000;
         long remaining = AUTO_SELECT_SECONDS - elapsed;
         if (remaining > 0 && !selectionMade) {
-            String countdown = "Auto-selecting Plane Game in " + remaining + "s";
+            String countdown = "Auto-selecting Space Shooter in " + remaining + "s";
             fm = g2d.getFontMetrics();
             int countX = (getWidth() - fm.stringWidth(countdown)) / 2;
             g2d.drawString(countdown, countX, 420);
