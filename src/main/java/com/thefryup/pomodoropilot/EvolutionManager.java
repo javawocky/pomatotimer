@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Random;
 
 public class EvolutionManager {
-    private static final int POPULATION_SIZE = 10;
+    private static final int POPULATION_SIZE = 15;
     private static final double MUTATION_RATE = 0.15;
     private static final int MAX_HISTORY = 30; // Keep last 30 generations
     

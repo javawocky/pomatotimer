@@ -493,7 +493,8 @@ public class GamePanel extends JPanel {
             
             if (!platformSpawned) {
                 // Calculate max obstacles based on time: 2 for first 3s, 3 for next 3s, etc.
-                int maxObstacles = 2 + (secondsElapsed / 3);
+                // 30% faster difficulty ramp: increase every 2.3 seconds instead of 3
+                int maxObstacles = 2 + (int)(secondsElapsed / 2.3);
                 
                 // Count only obstacles ahead of the player
                 int planeX = 80;
