@@ -262,12 +262,10 @@ public class SpaceShooterPanel extends JPanel {
                 return; // Don't update anything else when all dead
             }
             
-            // All AI ships think and act
-            for (AIShip ship : evolutionManager.getPopulation()) {
-                if (ship.alive) {
-                    ship.think(meteors);
-                }
-            }
+            // All AI ships think and act in parallel
+            evolutionManager.getPopulation().parallelStream()
+                .filter(ship -> ship.alive)
+                .forEach(ship -> ship.think(meteors));
         }
         
         // Spawn meteors with increasing difficulty (1.1x faster ramp)
@@ -284,7 +282,7 @@ public class SpaceShooterPanel extends JPanel {
         }
         
         // Update meteors and check for scoring
-        for (Meteor meteor : meteors) {
+        meteors.parallelStream().forEach(meteor -> {
             meteor.update();
             
             if (playerMode) {
@@ -304,22 +302,22 @@ public class SpaceShooterPanel extends JPanel {
                     }
                 }
             }
-        }
+        });
         
-        // Check collisions (only for AI ships in AI mode)
+        // Check collisions (only for AI ships in AI mode) - parallel
         if (!playerMode) {
             double hitboxShrink = 0.1;
             
-            for (AIShip ship : evolutionManager.getPopulation()) {
-                if (!ship.alive) continue;
-                
-                for (Meteor meteor : meteors) {
-                    if (checkCollision(ship, meteor)) {
-                        ship.alive = false;
-                        break;
+            evolutionManager.getPopulation().parallelStream()
+                .filter(ship -> ship.alive)
+                .forEach(ship -> {
+                    for (Meteor meteor : meteors) {
+                        if (checkCollision(ship, meteor)) {
+                            ship.alive = false;
+                            break;
+                        }
                     }
-                }
-            }
+                });
         }
         
         // Remove off-screen meteors
