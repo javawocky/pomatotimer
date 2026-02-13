@@ -35,6 +35,26 @@ public class Main {
     }
         
     public static void main(String[] args) throws InterruptedException, UnsupportedAudioFileException, LineUnavailableException, IOException {
+        // Show game selection screen
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("Pomodoro Pilot");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            
+            GameSelectionPanel selectionPanel = new GameSelectionPanel(frame);
+            frame.add(selectionPanel);
+            
+            frame.pack();
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+            
+            selectionPanel.requestFocusInWindow();
+        });
+        
+        return; // Exit main thread, let Swing handle the rest
+    }
+    
+    // Keep old main logic for reference (can be removed later)
+    public static void mainOld(String[] args) throws InterruptedException, UnsupportedAudioFileException, LineUnavailableException, IOException {
         int workMinutes = 20 * 60;
         int breakMinutes = 5 * 60;
         double screenshotAt = -1;
