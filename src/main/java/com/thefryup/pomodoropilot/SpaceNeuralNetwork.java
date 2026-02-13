@@ -4,90 +4,67 @@ import java.util.Random;
 
 public class SpaceNeuralNetwork {
     private static final int INPUT_SIZE = 22; // 18 raycasts + velocity (vx, vy) + rotation (angle, angular velocity)
-    private static final int HIDDEN1_SIZE = 16;
-    private static final int RECURRENT_SIZE = 6; // Memory layer
+    private static final int HIDDEN1_SIZE = 32;
+    private static final int HIDDEN2_SIZE = 24;
     private static final int OUTPUT_SIZE = 3; // left, right, thrust
     
     private double[][] weightsInputHidden1;
     private double[] biasHidden1;
-    private double[][] weightsHidden1Recurrent;
-    private double[][] weightsRecurrentRecurrent; // Recurrent connections
-    private double[] biasRecurrent;
-    private double[][] weightsRecurrentOutput;
+    private double[][] weightsHidden1Hidden2;
+    private double[] biasHidden2;
+    private double[][] weightsHidden2Output;
     private double[] biasOutput;
     
     // Store last activations for visualization
     private double[] lastInputs;
     private double[] lastHidden1;
-    private double[] lastRecurrent;
+    private double[] lastHidden2;
     private double[] lastOutput;
-    
-    // Recurrent state (persists between frames)
-    private double[] recurrentState;
     
     public SpaceNeuralNetwork() {
         Random rand = new Random();
         
-        // Input to Hidden1
+        // Input to Hidden1 - Xavier initialization
         weightsInputHidden1 = new double[INPUT_SIZE][HIDDEN1_SIZE];
+        double limit1 = Math.sqrt(6.0 / (INPUT_SIZE + HIDDEN1_SIZE));
         for (int i = 0; i < INPUT_SIZE; i++) {
             for (int j = 0; j < HIDDEN1_SIZE; j++) {
-                weightsInputHidden1[i][j] = rand.nextGaussian() * 0.5;
+                weightsInputHidden1[i][j] = (rand.nextDouble() * 2 - 1) * limit1;
             }
         }
         
         biasHidden1 = new double[HIDDEN1_SIZE];
-        for (int i = 0; i < HIDDEN1_SIZE; i++) {
-            biasHidden1[i] = rand.nextGaussian() * 0.5;
-        }
         
-        // Hidden1 to Recurrent
-        weightsHidden1Recurrent = new double[HIDDEN1_SIZE][RECURRENT_SIZE];
+        // Hidden1 to Hidden2
+        weightsHidden1Hidden2 = new double[HIDDEN1_SIZE][HIDDEN2_SIZE];
+        double limit2 = Math.sqrt(6.0 / (HIDDEN1_SIZE + HIDDEN2_SIZE));
         for (int i = 0; i < HIDDEN1_SIZE; i++) {
-            for (int j = 0; j < RECURRENT_SIZE; j++) {
-                weightsHidden1Recurrent[i][j] = rand.nextGaussian() * 0.5;
+            for (int j = 0; j < HIDDEN2_SIZE; j++) {
+                weightsHidden1Hidden2[i][j] = (rand.nextDouble() * 2 - 1) * limit2;
             }
         }
         
-        // Recurrent to Recurrent (memory connections)
-        weightsRecurrentRecurrent = new double[RECURRENT_SIZE][RECURRENT_SIZE];
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
-            for (int j = 0; j < RECURRENT_SIZE; j++) {
-                weightsRecurrentRecurrent[i][j] = rand.nextGaussian() * 0.3; // Smaller weights for stability
-            }
-        }
+        biasHidden2 = new double[HIDDEN2_SIZE];
         
-        biasRecurrent = new double[RECURRENT_SIZE];
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
-            biasRecurrent[i] = rand.nextGaussian() * 0.5;
-        }
-        
-        // Recurrent to Output
-        weightsRecurrentOutput = new double[RECURRENT_SIZE][OUTPUT_SIZE];
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
+        // Hidden2 to Output
+        weightsHidden2Output = new double[HIDDEN2_SIZE][OUTPUT_SIZE];
+        double limit3 = Math.sqrt(6.0 / (HIDDEN2_SIZE + OUTPUT_SIZE));
+        for (int i = 0; i < HIDDEN2_SIZE; i++) {
             for (int j = 0; j < OUTPUT_SIZE; j++) {
-                weightsRecurrentOutput[i][j] = rand.nextGaussian() * 0.5;
+                weightsHidden2Output[i][j] = (rand.nextDouble() * 2 - 1) * limit3;
             }
         }
         
         biasOutput = new double[OUTPUT_SIZE];
-        for (int i = 0; i < OUTPUT_SIZE; i++) {
-            biasOutput[i] = rand.nextGaussian() * 0.5;
-        }
-        
-        // Initialize recurrent state to zeros
-        recurrentState = new double[RECURRENT_SIZE];
     }
     
-    private SpaceNeuralNetwork(double[][] wih1, double[] bh1, double[][] wh1r, double[][] wrr, double[] br, double[][] wro, double[] bo) {
+    private SpaceNeuralNetwork(double[][] wih1, double[] bh1, double[][] wh1h2, double[] bh2, double[][] wh2o, double[] bo) {
         this.weightsInputHidden1 = wih1;
         this.biasHidden1 = bh1;
-        this.weightsHidden1Recurrent = wh1r;
-        this.weightsRecurrentRecurrent = wrr;
-        this.biasRecurrent = br;
-        this.weightsRecurrentOutput = wro;
+        this.weightsHidden1Hidden2 = wh1h2;
+        this.biasHidden2 = bh2;
+        this.weightsHidden2Output = wh2o;
         this.biasOutput = bo;
-        this.recurrentState = new double[RECURRENT_SIZE];
     }
     
     public double[] predict(double[] inputs) {
@@ -104,34 +81,25 @@ public class SpaceNeuralNetwork {
             for (int j = 0; j < INPUT_SIZE; j++) {
                 sum += inputs[j] * weightsInputHidden1[j][i];
             }
-            lastHidden1[i] = tanh(sum);
+            lastHidden1[i] = relu(sum);
         }
         
-        // Recurrent layer (combines hidden1 + previous recurrent state)
-        double[] newRecurrent = new double[RECURRENT_SIZE];
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
-            double sum = biasRecurrent[i];
-            // Input from hidden1
+        // Hidden layer 2
+        lastHidden2 = new double[HIDDEN2_SIZE];
+        for (int i = 0; i < HIDDEN2_SIZE; i++) {
+            double sum = biasHidden2[i];
             for (int j = 0; j < HIDDEN1_SIZE; j++) {
-                sum += lastHidden1[j] * weightsHidden1Recurrent[j][i];
+                sum += lastHidden1[j] * weightsHidden1Hidden2[j][i];
             }
-            // Input from previous recurrent state (memory)
-            for (int j = 0; j < RECURRENT_SIZE; j++) {
-                sum += recurrentState[j] * weightsRecurrentRecurrent[j][i];
-            }
-            newRecurrent[i] = tanh(sum);
+            lastHidden2[i] = relu(sum);
         }
-        
-        // Update recurrent state for next frame
-        recurrentState = newRecurrent;
-        lastRecurrent = newRecurrent;
         
         // Output layer
         lastOutput = new double[OUTPUT_SIZE];
         for (int i = 0; i < OUTPUT_SIZE; i++) {
             lastOutput[i] = biasOutput[i];
-            for (int j = 0; j < RECURRENT_SIZE; j++) {
-                lastOutput[i] += lastRecurrent[j] * weightsRecurrentOutput[j][i];
+            for (int j = 0; j < HIDDEN2_SIZE; j++) {
+                lastOutput[i] += lastHidden2[j] * weightsHidden2Output[j][i];
             }
             lastOutput[i] = sigmoid(lastOutput[i]);
         }
@@ -140,12 +108,11 @@ public class SpaceNeuralNetwork {
     }
     
     public void resetState() {
-        // Reset recurrent state (call when ship dies/respawns)
-        recurrentState = new double[RECURRENT_SIZE];
+        // No-op for feedforward network
     }
     
-    private double tanh(double x) {
-        return Math.tanh(x);
+    private double relu(double x) {
+        return Math.max(0, x);
     }
     
     private double sigmoid(double x) {
@@ -161,28 +128,23 @@ public class SpaceNeuralNetwork {
         double[] bh1 = new double[HIDDEN1_SIZE];
         System.arraycopy(biasHidden1, 0, bh1, 0, HIDDEN1_SIZE);
         
-        double[][] wh1r = new double[HIDDEN1_SIZE][RECURRENT_SIZE];
+        double[][] wh1h2 = new double[HIDDEN1_SIZE][HIDDEN2_SIZE];
         for (int i = 0; i < HIDDEN1_SIZE; i++) {
-            System.arraycopy(weightsHidden1Recurrent[i], 0, wh1r[i], 0, RECURRENT_SIZE);
+            System.arraycopy(weightsHidden1Hidden2[i], 0, wh1h2[i], 0, HIDDEN2_SIZE);
         }
         
-        double[][] wrr = new double[RECURRENT_SIZE][RECURRENT_SIZE];
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
-            System.arraycopy(weightsRecurrentRecurrent[i], 0, wrr[i], 0, RECURRENT_SIZE);
-        }
+        double[] bh2 = new double[HIDDEN2_SIZE];
+        System.arraycopy(biasHidden2, 0, bh2, 0, HIDDEN2_SIZE);
         
-        double[] br = new double[RECURRENT_SIZE];
-        System.arraycopy(biasRecurrent, 0, br, 0, RECURRENT_SIZE);
-        
-        double[][] wro = new double[RECURRENT_SIZE][OUTPUT_SIZE];
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
-            System.arraycopy(weightsRecurrentOutput[i], 0, wro[i], 0, OUTPUT_SIZE);
+        double[][] wh2o = new double[HIDDEN2_SIZE][OUTPUT_SIZE];
+        for (int i = 0; i < HIDDEN2_SIZE; i++) {
+            System.arraycopy(weightsHidden2Output[i], 0, wh2o[i], 0, OUTPUT_SIZE);
         }
         
         double[] bo = new double[OUTPUT_SIZE];
         System.arraycopy(biasOutput, 0, bo, 0, OUTPUT_SIZE);
         
-        return new SpaceNeuralNetwork(wih1, bh1, wh1r, wrr, br, wro, bo);
+        return new SpaceNeuralNetwork(wih1, bh1, wh1h2, bh2, wh2o, bo);
     }
     
     public void mutate(double mutationRate) {
@@ -192,53 +154,44 @@ public class SpaceNeuralNetwork {
         for (int i = 0; i < INPUT_SIZE; i++) {
             for (int j = 0; j < HIDDEN1_SIZE; j++) {
                 if (rand.nextDouble() < mutationRate) {
-                    weightsInputHidden1[i][j] += rand.nextGaussian() * 0.3;
+                    weightsInputHidden1[i][j] += rand.nextGaussian() * 0.2;
                 }
             }
         }
         
         for (int i = 0; i < HIDDEN1_SIZE; i++) {
             if (rand.nextDouble() < mutationRate) {
-                biasHidden1[i] += rand.nextGaussian() * 0.3;
+                biasHidden1[i] += rand.nextGaussian() * 0.2;
             }
         }
         
-        // Mutate hidden1 to recurrent
+        // Mutate hidden1 to hidden2
         for (int i = 0; i < HIDDEN1_SIZE; i++) {
-            for (int j = 0; j < RECURRENT_SIZE; j++) {
+            for (int j = 0; j < HIDDEN2_SIZE; j++) {
                 if (rand.nextDouble() < mutationRate) {
-                    weightsHidden1Recurrent[i][j] += rand.nextGaussian() * 0.3;
+                    weightsHidden1Hidden2[i][j] += rand.nextGaussian() * 0.2;
                 }
             }
         }
         
-        // Mutate recurrent to recurrent
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
-            for (int j = 0; j < RECURRENT_SIZE; j++) {
-                if (rand.nextDouble() < mutationRate) {
-                    weightsRecurrentRecurrent[i][j] += rand.nextGaussian() * 0.2; // Smaller mutations for stability
-                }
-            }
-        }
-        
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
+        for (int i = 0; i < HIDDEN2_SIZE; i++) {
             if (rand.nextDouble() < mutationRate) {
-                biasRecurrent[i] += rand.nextGaussian() * 0.3;
+                biasHidden2[i] += rand.nextGaussian() * 0.2;
             }
         }
         
-        // Mutate recurrent to output
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
+        // Mutate hidden2 to output
+        for (int i = 0; i < HIDDEN2_SIZE; i++) {
             for (int j = 0; j < OUTPUT_SIZE; j++) {
                 if (rand.nextDouble() < mutationRate) {
-                    weightsRecurrentOutput[i][j] += rand.nextGaussian() * 0.3;
+                    weightsHidden2Output[i][j] += rand.nextGaussian() * 0.2;
                 }
             }
         }
         
         for (int i = 0; i < OUTPUT_SIZE; i++) {
             if (rand.nextDouble() < mutationRate) {
-                biasOutput[i] += rand.nextGaussian() * 0.3;
+                biasOutput[i] += rand.nextGaussian() * 0.2;
             }
         }
     }
@@ -246,11 +199,11 @@ public class SpaceNeuralNetwork {
     // Getters for visualization
     public double[] getLastInputs() { return lastInputs; }
     public double[] getLastHidden1() { return lastHidden1; }
-    public double[] getLastRecurrent() { return lastRecurrent; }
+    public double[] getLastHidden2() { return lastHidden2; }
     public double[] getLastOutput() { return lastOutput; }
     public double[][] getWeightsInputHidden1() { return weightsInputHidden1; }
-    public double[][] getWeightsHidden1Recurrent() { return weightsHidden1Recurrent; }
-    public double[][] getWeightsRecurrentOutput() { return weightsRecurrentOutput; }
+    public double[][] getWeightsHidden1Hidden2() { return weightsHidden1Hidden2; }
+    public double[][] getWeightsHidden2Output() { return weightsHidden2Output; }
     
     public static SpaceNeuralNetwork crossover(SpaceNeuralNetwork parent1, SpaceNeuralNetwork parent2, Random rand) {
         SpaceNeuralNetwork child = parent1.clone();
@@ -270,35 +223,26 @@ public class SpaceNeuralNetwork {
             }
         }
         
-        // Crossover hidden1 to recurrent
+        // Crossover hidden1 to hidden2
         for (int i = 0; i < HIDDEN1_SIZE; i++) {
-            for (int j = 0; j < RECURRENT_SIZE; j++) {
+            for (int j = 0; j < HIDDEN2_SIZE; j++) {
                 if (rand.nextBoolean()) {
-                    child.weightsHidden1Recurrent[i][j] = parent2.weightsHidden1Recurrent[i][j];
+                    child.weightsHidden1Hidden2[i][j] = parent2.weightsHidden1Hidden2[i][j];
                 }
             }
         }
         
-        // Crossover recurrent to recurrent
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
-            for (int j = 0; j < RECURRENT_SIZE; j++) {
-                if (rand.nextBoolean()) {
-                    child.weightsRecurrentRecurrent[i][j] = parent2.weightsRecurrentRecurrent[i][j];
-                }
-            }
-        }
-        
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
+        for (int i = 0; i < HIDDEN2_SIZE; i++) {
             if (rand.nextBoolean()) {
-                child.biasRecurrent[i] = parent2.biasRecurrent[i];
+                child.biasHidden2[i] = parent2.biasHidden2[i];
             }
         }
         
-        // Crossover recurrent to output
-        for (int i = 0; i < RECURRENT_SIZE; i++) {
+        // Crossover hidden2 to output
+        for (int i = 0; i < HIDDEN2_SIZE; i++) {
             for (int j = 0; j < OUTPUT_SIZE; j++) {
                 if (rand.nextBoolean()) {
-                    child.weightsRecurrentOutput[i][j] = parent2.weightsRecurrentOutput[i][j];
+                    child.weightsHidden2Output[i][j] = parent2.weightsHidden2Output[i][j];
                 }
             }
         }

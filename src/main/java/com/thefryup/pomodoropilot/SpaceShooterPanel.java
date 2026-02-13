@@ -635,7 +635,7 @@ public class SpaceShooterPanel extends JPanel {
         
         double[] inputs = best.brain.getLastInputs();
         double[] h1 = best.brain.getLastHidden1();
-        double[] recurrent = best.brain.getLastRecurrent();
+        double[] h2 = best.brain.getLastHidden2();
         double[] outputs = best.brain.getLastOutput();
         
         if (outputs == null || outputs.length < 3 || inputs.length < 22) return;
@@ -648,7 +648,7 @@ public class SpaceShooterPanel extends JPanel {
         // Draw connections (simplified - just show strong ones)
         final float threshold = 0.05f;
         
-        // Input to H1 (show first 8 of 22 inputs - raycasts)
+        // Input to H1 (show first 8 of 22 inputs)
         for (int i = 0; i < Math.min(8, inputs.length); i++) {
             int y1 = netY + 5 + i * 5;
             double input = inputs[i];
@@ -662,54 +662,53 @@ public class SpaceShooterPanel extends JPanel {
             }
         }
         
-        // H1 to Recurrent (8 h1 nodes to 6 recurrent nodes)
+        // H1 to H2
         for (int i = 0; i < Math.min(8, h1.length); i++) {
             int y1 = netY + 5 + i * 5;
-            double h1Val = h1[i];
-            for (int j = 0; j < Math.min(6, recurrent.length); j++) {
-                float activation = (float)Math.abs(h1Val * recurrent[j]);
+            for (int j = 0; j < Math.min(8, h2.length); j++) {
+                float activation = (float)Math.abs(h1[i] * h2[j]);
                 if (activation > threshold) {
-                    int y2 = netY + 8 + j * 6;
+                    int y2 = netY + 5 + j * 5;
                     g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
                     g2d.drawLine(layerX[1], y1, layerX[2], y2);
                 }
             }
         }
         
-        // Recurrent to Outputs (3 outputs: left, right, thrust)
+        // H2 to Outputs
         for (int out = 0; out < 3; out++) {
             int y2 = netY + 15 + out * 10;
-            for (int i = 0; i < Math.min(6, recurrent.length); i++) {
-                float activation = (float)Math.abs(recurrent[i]);
+            for (int i = 0; i < Math.min(8, h2.length); i++) {
+                float activation = (float)Math.abs(h2[i]);
                 if (activation > threshold) {
-                    int y1 = netY + 8 + i * 6;
+                    int y1 = netY + 5 + i * 5;
                     g2d.setColor(new Color(activation, activation * 0.5f, 0, 0.3f));
                     g2d.drawLine(layerX[2], y1, layerX[3], y2);
                 }
             }
         }
         
-        // Draw nodes - Input layer (first 8 of 22 - raycasts)
+        // Draw nodes - Input layer (first 8 of 22)
         for (int i = 0; i < Math.min(8, inputs.length); i++) {
             int y = netY + 5 + i * 5;
-            float val = (float)inputs[i]; // Raycasts are already 0-1
+            float val = (float)Math.min(1.0, inputs[i]);
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[0] - 1, y - 1, nodeSize, nodeSize);
         }
         
-        // Hidden layer 1 (first 8 nodes)
+        // Hidden layer 1 (first 8 nodes) - ReLU so 0 to positive
         for (int i = 0; i < Math.min(8, h1.length); i++) {
             int y = netY + 5 + i * 5;
-            float val = (float)((h1[i] + 1) * 0.5);
+            float val = (float)Math.min(1.0, Math.max(0, h1[i] / 2.0)); // Normalize ReLU output
             g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[1] - 1, y - 1, nodeSize, nodeSize);
         }
         
-        // Recurrent layer (6 nodes) - draw with blue tint to show it's special
-        for (int i = 0; i < Math.min(6, recurrent.length); i++) {
-            int y = netY + 8 + i * 6;
-            float val = (float)((recurrent[i] + 1) * 0.5);
-            g2d.setColor(new Color(1 - val, val * 0.7f, val * 0.3f)); // Slight blue tint
+        // Hidden layer 2 (first 8 nodes)
+        for (int i = 0; i < Math.min(8, h2.length); i++) {
+            int y = netY + 5 + i * 5;
+            float val = (float)Math.min(1.0, Math.max(0, h2[i] / 2.0));
+            g2d.setColor(new Color(1 - val, val, 0));
             g2d.fillOval(layerX[2] - 1, y - 1, nodeSize, nodeSize);
         }
         
