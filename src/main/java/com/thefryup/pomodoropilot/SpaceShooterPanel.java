@@ -17,9 +17,14 @@ public class SpaceShooterPanel extends JPanel {
     private BufferedImage[] meteorImages; // Various meteor types
     private BufferedImage background;
     
+    // UI text rendering
+    private BufferedImage[] letterImages = new BufferedImage[26];
+    private BufferedImage[] numberImages = new BufferedImage[10];
+    
     private AIShip testShip; // AI-controlled ship for testing
     private SpaceEvolutionManager evolutionManager; // Manages AI population
     private List<Meteor> meteors;
+    private SpatialGrid spatialGrid;
     private Random rand;
     
     private int frameCounter = 0;
@@ -33,7 +38,7 @@ public class SpaceShooterPanel extends JPanel {
     private boolean leftPressed = false;
     private boolean rightPressed = false;
     private boolean thrustPressed = false;
-    private boolean showRaycasts = true; // Toggle with R key
+    private boolean showRaycasts = false; // Toggle with R key (default OFF)
     private boolean turboMode = false; // Toggle with T key
     private boolean fastForwardMode = false;
     private int fastForwardTarget = 0;
@@ -55,6 +60,7 @@ public class SpaceShooterPanel extends JPanel {
         
         rand = new Random();
         meteors = new ArrayList<>();
+        spatialGrid = new SpatialGrid();
         
         loadImages();
         
@@ -87,11 +93,16 @@ public class SpaceShooterPanel extends JPanel {
                 if (e.getKeyCode() == KeyEvent.VK_T) {
                     turboMode = !turboMode;
                     System.out.println("Turbo Mode: " + (turboMode ? "ON" : "OFF"));
+                    // Force visualization refresh when exiting turbo mode
+                    if (!turboMode) {
+                        visualizationUpdateCounter = VISUALIZATION_UPDATE_INTERVAL;
+                    }
                 }
                 if (e.getKeyCode() == KeyEvent.VK_SPACE && !playerMode) {
                     // Enter player mode
                     playerMode = true;
                     playerShip = new Ship(160, 160, 0);
+                    rightArrowReleased = false; // Prevent fast forward from activating immediately
                     // Kill all AI ships so they don't interfere
                     for (AIShip ship : evolutionManager.getPopulation()) {
                         ship.alive = false;
@@ -139,6 +150,34 @@ public class SpaceShooterPanel extends JPanel {
                         fastForwardMode = false;
                         rightArrowReleased = true;
                         System.out.println("Fast forward complete at gen " + evolutionManager.getGeneration());
+                        
+                        // Immediately regenerate visualizations
+                        if (cachedFitnessGraph == null) {
+                            cachedFitnessGraph = new BufferedImage(230, 126, BufferedImage.TYPE_INT_ARGB);
+                        }
+                        Graphics2D gFit = cachedFitnessGraph.createGraphics();
+                        gFit.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        gFit.setComposite(AlphaComposite.Clear);
+                        gFit.fillRect(0, 0, 230, 126);
+                        gFit.setComposite(AlphaComposite.SrcOver);
+                        gFit.scale(2.0, 2.0);
+                        drawFitnessGraphToImage(gFit);
+                        gFit.dispose();
+                        
+                        if (cachedNeuralNetwork == null) {
+                            cachedNeuralNetwork = new BufferedImage(230, 126, BufferedImage.TYPE_INT_ARGB);
+                        }
+                        Graphics2D gNet = cachedNeuralNetwork.createGraphics();
+                        gNet.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        gNet.setComposite(AlphaComposite.Clear);
+                        gNet.fillRect(0, 0, 230, 126);
+                        gNet.setComposite(AlphaComposite.SrcOver);
+                        gNet.scale(2.0, 2.0);
+                        drawNeuralNetworkToImage(gNet);
+                        gNet.dispose();
+                        
+                        visualizationUpdateCounter = 0;
+                        
                         // Force one repaint after fast forward
                         SwingUtilities.invokeLater(() -> {
                             repaint();
@@ -199,6 +238,21 @@ public class SpaceShooterPanel extends JPanel {
             BufferedImage origBg = ImageIO.read(getClass().getResourceAsStream("/spaceshooter/black.png"));
             background = scaleImage(origBg, origBg.getWidth() / 3, origBg.getHeight() / 3);
             
+            // Load letters (A-Z) from SpaceShooter pack and scale to height 13.5 (75% of 18)
+            for (int i = 0; i < 26; i++) {
+                char letter = (char)('A' + i);
+                BufferedImage let = ImageIO.read(getClass().getResourceAsStream("/spaceshooter/letter" + letter + ".png"));
+                int scaledWidth = (int)(let.getWidth() * (13.5 / let.getHeight()));
+                letterImages[i] = scaleImage(let, scaledWidth, 13);
+            }
+            
+            // Load numbers (0-9) from SpaceShooter pack and scale to height 13.5 (75% of 18)
+            for (int i = 0; i < 10; i++) {
+                BufferedImage num = ImageIO.read(getClass().getResourceAsStream("/spaceshooter/numeral" + i + ".png"));
+                int scaledWidth = (int)(num.getWidth() * (13.5 / num.getHeight()));
+                numberImages[i] = scaleImage(num, scaledWidth, 13);
+            }
+            
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -247,6 +301,7 @@ public class SpaceShooterPanel extends JPanel {
             if (!playerShip.alive) {
                 playerMode = false;
                 playerShip = null;
+                rightArrowReleased = false; // Prevent fast forward from activating immediately
                 // Restart the game to get fresh AI ships
                 restartGame();
                 return; // Exit update early
@@ -255,17 +310,25 @@ public class SpaceShooterPanel extends JPanel {
             // AI mode
             // Handle game over state (all ships dead)
             if (evolutionManager.allDead()) {
-                gameOverTimer++;
-                if (gameOverTimer > 90) { // 1.5 seconds at 60 FPS
+                // In turbo mode, restart immediately. Otherwise wait 1.5 seconds
+                if (turboMode) {
                     restartGame();
+                } else {
+                    gameOverTimer++;
+                    if (gameOverTimer > 90) { // 1.5 seconds at 60 FPS
+                        restartGame();
+                    }
                 }
                 return; // Don't update anything else when all dead
             }
             
-            // All AI ships think and act in parallel
+            // Update spatial grid with current meteors
+            spatialGrid.update(meteors);
+            
+            // All AI ships think and act in parallel with spatial optimization
             evolutionManager.getPopulation().parallelStream()
                 .filter(ship -> ship.alive)
-                .forEach(ship -> ship.think(meteors));
+                .forEach(ship -> ship.thinkWithGrid(spatialGrid));
         }
         
         // Spawn meteors with increasing difficulty (1.1x faster ramp)
@@ -286,14 +349,16 @@ public class SpaceShooterPanel extends JPanel {
             meteor.update();
             
             if (playerMode) {
-                // Award points to player
-                if (!meteor.scored && meteor.y > 240) {
+                // Award points to player when meteor exits any edge
+                if (!meteor.scored && (meteor.y > 240 || meteor.y < -meteor.height || 
+                                       meteor.x < -meteor.width || meteor.x > 320)) {
                     meteor.scored = true;
-                    // Could track player score here if needed
+                    score += 10;
                 }
             } else {
-                // Award points when meteor exits bottom (to all alive ships)
-                if (!meteor.scored && meteor.y > 240) {
+                // Award points when meteor exits any edge (to all alive ships)
+                if (!meteor.scored && (meteor.y > 240 || meteor.y < -meteor.height || 
+                                       meteor.x < -meteor.width || meteor.x > 320)) {
                     meteor.scored = true;
                     for (AIShip ship : evolutionManager.getPopulation()) {
                         if (ship.alive) {
@@ -475,19 +540,49 @@ public class SpaceShooterPanel extends JPanel {
             }
         }
         
-        // Draw debug info
-        g2d.setColor(Color.WHITE);
-        if (playerMode) {
-            g2d.drawString("PLAYER MODE", 10, 20);
-            g2d.drawString("Time: " + (frameCounter / 60) + "s", 10, 35);
-            g2d.drawString("Meteors: " + meteors.size(), 10, 50);
-        } else {
-            g2d.drawString("Gen: " + evolutionManager.getGeneration(), 10, 20);
-            g2d.drawString("Alive: " + evolutionManager.getAliveCount(), 10, 35);
-            g2d.drawString("Best Score: " + evolutionManager.getBestScoreThisGen(), 10, 50);
-            g2d.drawString("High Score: " + evolutionManager.getBestScoreEver(), 10, 65);
-            g2d.drawString("Time: " + (frameCounter / 60) + "s", 10, 80);
-            g2d.drawString("Meteors: " + meteors.size(), 10, 95);
+        // Draw raycasts if enabled
+        if (showRaycasts && !playerMode) {
+            for (AIShip ship : evolutionManager.getPopulation()) {
+                if (ship.alive) {
+                    // Get cached rays from ship
+                    SpaceRaycast.RayResult[] rays = new SpaceRaycast.RayResult[18];
+                    for (int i = 0; i < 18; i++) {
+                        double angle = ship.rotation - 90 + (i * 20);
+                        rays[i] = SpaceRaycast.castSingleRay(ship.getCenterX(), ship.getCenterY(), 
+                                                             angle, spatialGrid, 120);
+                    }
+                    SpaceRaycast.drawRays(g2d, ship, rays);
+                }
+            }
+        }
+        
+        // Draw UI text - skip in fast forward mode
+        if (!fastForwardMode) {
+            if (playerMode) {
+                // Player mode: show current score and high score
+                String scoreText = String.format("%05d", score);
+                int scoreWidth = getTextWidth(scoreText);
+                drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
+                
+                String highScoreText = "HI " + String.format("%05d", highScore);
+                int hsWidth = getTextWidth(highScoreText);
+                drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
+            } else {
+                // AI mode: show GEN, ALIVE, best score, and high score
+                String genText = "GEN " + evolutionManager.getGeneration();
+                drawText(g2d, genText, 15, 45);
+                
+                String aliveText = "ALIVE " + evolutionManager.getAliveCount();
+                drawText(g2d, aliveText, 15, 65);
+                
+                String scoreText = String.format("%05d", evolutionManager.getBestScoreThisGen());
+                int scoreWidth = getTextWidth(scoreText);
+                drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
+                
+                String highScoreText = "HI " + String.format("%05d", evolutionManager.getBestScoreEver());
+                int hsWidth = getTextWidth(highScoreText);
+                drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
+            }
         }
         
         // Draw fitness graph and neural network (only in AI mode and not in fast forward)
@@ -504,10 +599,12 @@ public class SpaceShooterPanel extends JPanel {
                 }
                 Graphics2D gFit = cachedFitnessGraph.createGraphics();
                 gFit.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                gFit.scale(2.0, 2.0); // Scale up for higher resolution
+                // Clear the full image first (before scaling)
                 gFit.setComposite(AlphaComposite.Clear);
-                gFit.fillRect(0, 0, 115, 63);
+                gFit.fillRect(0, 0, 230, 126);
                 gFit.setComposite(AlphaComposite.SrcOver);
+                // Now scale and draw
+                gFit.scale(2.0, 2.0);
                 drawFitnessGraphToImage(gFit);
                 gFit.dispose();
                 
@@ -517,10 +614,12 @@ public class SpaceShooterPanel extends JPanel {
                 }
                 Graphics2D gNet = cachedNeuralNetwork.createGraphics();
                 gNet.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                gNet.scale(2.0, 2.0); // Scale up for higher resolution
+                // Clear the full image first (before scaling)
                 gNet.setComposite(AlphaComposite.Clear);
-                gNet.fillRect(0, 0, 115, 63);
+                gNet.fillRect(0, 0, 230, 126);
                 gNet.setComposite(AlphaComposite.SrcOver);
+                // Now scale and draw
+                gNet.scale(2.0, 2.0);
                 drawNeuralNetworkToImage(gNet);
                 gNet.dispose();
             }
@@ -732,5 +831,49 @@ public class SpaceShooterPanel extends JPanel {
             g2d.setFont(new Font("Arial", Font.PLAIN, 6));
             g2d.drawString(labels[i], layerX[3] + 5, y + 2);
         }
+    }
+    
+    /**
+     * Draw text using letter/number images (same as plane game)
+     */
+    private void drawText(Graphics2D g2d, String text, int x, int y) {
+        int currentX = x;
+        for (char c : text.toCharArray()) {
+            BufferedImage img = null;
+            if (c >= '0' && c <= '9') {
+                img = numberImages[c - '0'];
+            } else if (c >= 'A' && c <= 'Z') {
+                img = letterImages[c - 'A'];
+            } else if (c >= 'a' && c <= 'z') {
+                img = letterImages[c - 'a'];
+            } else if (c == ' ') {
+                currentX += 6;  // 75% of 8
+                continue;
+            }
+            
+            if (img != null) {
+                g2d.drawImage(img, currentX, y - 13, null);
+                currentX += img.getWidth() + 1;  // Add 1 pixel spacing between letters
+            }
+        }
+    }
+    
+    /**
+     * Calculate text width for positioning
+     */
+    private int getTextWidth(String text) {
+        int width = 0;
+        for (char c : text.toCharArray()) {
+            if (c >= '0' && c <= '9') {
+                width += numberImages[c - '0'].getWidth() + 1;  // Add 1 pixel spacing
+            } else if (c >= 'A' && c <= 'Z') {
+                width += letterImages[c - 'A'].getWidth() + 1;  // Add 1 pixel spacing
+            } else if (c >= 'a' && c <= 'z') {
+                width += letterImages[c - 'a'].getWidth() + 1;  // Add 1 pixel spacing
+            } else if (c == ' ') {
+                width += 6;  // 75% of 8
+            }
+        }
+        return width;
     }
 }

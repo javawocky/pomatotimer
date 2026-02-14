@@ -16,8 +16,8 @@ public class Meteor {
         this.vx = vx;
         this.vy = vy;
         this.image = image;
-        this.width = image.getWidth();
-        this.height = image.getHeight();
+        this.width = image != null ? image.getWidth() : 20; // Default size for headless
+        this.height = image != null ? image.getHeight() : 20;
         this.scored = false;
         this.type = type;
     }

@@ -121,7 +121,7 @@ public class SpaceEvolutionManager {
             AIShip parent2 = selectParent();
             
             // Crossover
-            SpaceNeuralNetwork childBrain = SpaceNeuralNetwork.crossover(parent1.brain, parent2.brain, rand);
+            RecurrentNeuralNetwork childBrain = RecurrentNeuralNetwork.crossover(parent1.brain, parent2.brain, rand);
             
             // Mutate
             childBrain.mutate(MUTATION_RATE);
@@ -133,6 +133,16 @@ public class SpaceEvolutionManager {
         
         population = nextGen;
         generation++;
+    }
+    
+    /**
+     * Process all ships' AI (simple sequential for now)
+     */
+    public void thinkBatched(List<Meteor> meteors) {
+        // Sequential processing - each ship has different brain weights
+        population.stream()
+            .filter(ship -> ship.alive)
+            .forEach(ship -> ship.think(meteors));
     }
     
     private AIShip selectParent() {

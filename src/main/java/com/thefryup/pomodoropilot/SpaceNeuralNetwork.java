@@ -3,7 +3,7 @@ package com.thefryup.pomodoropilot;
 import java.util.Random;
 
 public class SpaceNeuralNetwork {
-    private static final int INPUT_SIZE = 22; // 18 raycasts + velocity (vx, vy) + rotation (angle, angular velocity)
+    private static final int INPUT_SIZE = 23; // 18 raycasts + vx + vy + sin(angle) + cos(angle) + angular velocity
     private static final int HIDDEN1_SIZE = 32;
     private static final int HIDDEN2_SIZE = 24;
     private static final int OUTPUT_SIZE = 3; // left, right, thrust

@@ -18,6 +18,19 @@ public class SpaceRaycast {
         }
     }
     
+    // Cache for lazy ray evaluation
+    private static class RayCache {
+        RayResult[] results = new RayResult[18];
+        int[] framesSinceUpdate = new int[18];
+        
+        RayCache() {
+            for (int i = 0; i < 18; i++) {
+                results[i] = new RayResult(0, 0, 0, false);
+                framesSinceUpdate[i] = 999; // Force initial calculation
+            }
+        }
+    }
+    
     /**
      * Cast 18 rays (every 20 degrees) from ship center to detect meteors
      * Rays are relative to ship's rotation (0° = ship's forward direction)
@@ -39,25 +52,33 @@ public class SpaceRaycast {
     }
     
     /**
-     * Cast a single ray and find nearest meteor or screen edge
+     * Cast a single ray at specified angle (for lazy evaluation)
+     */
+    public static RayResult castSingleRay(double centerX, double centerY, double angleDegrees, 
+                                          List<Meteor> meteors, int maxRayLength) {
+        return castRay(centerX, centerY, angleDegrees, meteors, maxRayLength);
+    }
+    
+    /**
+     * Cast a single ray with spatial partitioning
+     */
+    public static RayResult castSingleRay(double centerX, double centerY, double angleDegrees, 
+                                          SpatialGrid grid, int maxRayLength) {
+        return castRayWithGrid(centerX, centerY, angleDegrees, grid, maxRayLength);
+    }
+    
+    /**
+     * Cast a single ray and find nearest meteor (ignores screen edges)
      */
     private static RayResult castRay(double startX, double startY, double angleDegrees, 
                                      List<Meteor> meteors, int maxLength) {
         double angleRad = Math.toRadians(angleDegrees);
         double dx = Math.cos(angleRad);
         double dy = Math.sin(angleRad);
-        
         double closestDist = maxLength;
         boolean hit = false;
         
-        // Check intersection with screen edges (320x240)
-        double edgeDist = rayScreenEdgeIntersection(startX, startY, dx, dy);
-        if (edgeDist >= 0 && edgeDist < closestDist) {
-            closestDist = edgeDist;
-            hit = true;
-        }
-        
-        // Check intersection with each meteor
+        // Check intersection with each meteor (no screen edge detection)
         for (Meteor meteor : meteors) {
             // Simple circle approximation for meteor
             double meteorCenterX = meteor.getCenterX();
@@ -177,6 +198,49 @@ public class SpaceRaycast {
         }
         
         return -1;
+    }
+    
+    /**
+     * Cast ray using spatial grid (only checks nearby meteors)
+     */
+    private static RayResult castRayWithGrid(double startX, double startY, double angleDegrees,
+                                             SpatialGrid grid, int maxLength) {
+        double angleRad = Math.toRadians(angleDegrees);
+        double dx = Math.cos(angleRad);
+        double dy = Math.sin(angleRad);
+        
+        double closestDist = maxLength;
+        boolean hit = false;
+        
+        // Get ray endpoint for spatial query (no screen edge detection)
+        double endX = startX + dx * maxLength;
+        double endY = startY + dy * maxLength;
+        
+        // Only check meteors along the ray path
+        List<Meteor> nearbyMeteors = grid.getAlongRay(startX, startY, endX, endY);
+        
+        for (Meteor meteor : nearbyMeteors) {
+            double meteorCenterX = meteor.getCenterX();
+            double meteorCenterY = meteor.getCenterY();
+            double meteorRadius = Math.max(meteor.width, meteor.height) / 2.0;
+            
+            double dist = rayCircleIntersection(startX, startY, dx, dy,
+                                               meteorCenterX, meteorCenterY, meteorRadius);
+            
+            if (dist >= 0 && dist < closestDist) {
+                closestDist = dist;
+                hit = true;
+            }
+        }
+        
+        // Calculate final end point
+        endX = startX + dx * closestDist;
+        endY = startY + dy * closestDist;
+        
+        // Normalize distance (0 = far, 1 = close)
+        double normalizedDist = 1.0 - (closestDist / maxLength);
+        
+        return new RayResult(normalizedDist, endX, endY, hit);
     }
     
     /**

@@ -35,6 +35,26 @@ public class Main {
     }
         
     public static void main(String[] args) throws InterruptedException, UnsupportedAudioFileException, LineUnavailableException, IOException {
+        // Check for headless mode
+        boolean headless = false;
+        int maxGenerations = -1;
+        
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("--headless")) {
+                headless = true;
+            } else if (args[i].equals("--generations") && i + 1 < args.length) {
+                maxGenerations = Integer.parseInt(args[i + 1]);
+            }
+        }
+        
+        if (headless) {
+            System.out.println("Starting headless training mode...");
+            System.out.println("Max generations: " + maxGenerations);
+            HeadlessSpaceShooter simulation = new HeadlessSpaceShooter(maxGenerations);
+            simulation.run();
+            return;
+        }
+        
         // Show game selection screen
         SwingUtilities.invokeLater(() -> {
             JFrame frame = new JFrame("Pomodoro Pilot");
