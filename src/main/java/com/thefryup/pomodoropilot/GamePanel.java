@@ -41,7 +41,7 @@ public class GamePanel extends JPanel {
     private int fastForwardStartGen = 0;
     private boolean wasTurboMode = false;
     
-    private ArrayList<BackgroundPlane> backgroundPlanes = new ArrayList<>();
+    private java.util.concurrent.CopyOnWriteArrayList<BackgroundPlane> backgroundPlanes = new java.util.concurrent.CopyOnWriteArrayList<>();
     private ArrayList<Obstacle> obstacles = new ArrayList<>();
     private boolean isWorking = true;
     private boolean isLanding = false;
@@ -1546,6 +1546,10 @@ public class GamePanel extends JPanel {
             return backgroundPlanes.get(index);
         }
         return null;
+    }
+    
+    public java.util.List<BackgroundPlane> getBackgroundPlanesSnapshot() {
+        return new ArrayList<>(backgroundPlanes);
     }
     
     public boolean isLanding() {
