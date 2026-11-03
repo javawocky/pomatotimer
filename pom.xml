@@ -26,6 +26,11 @@
     <build>
         <plugins>
             <plugin>
+                <!-- 3.x is required for JUnit 5 (@BeforeEach etc.); Maven's default 2.12.4 skips lifecycle methods -->
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+            <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.3.0</version>
                 <configuration>

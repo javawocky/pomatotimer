@@ -21,22 +21,59 @@ public class RaycastSensor {
         }
     }
     
+    /** Ray angles relative to the plane's nose, in screen degrees (negative = up). */
+    static final double[] RAY_ANGLES = {0, -15, 15, -30, 30, -45, 45, 90, -90};
+    private static final int[] RAY_LENGTHS = {RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH / 3, RAY_LENGTH / 3};
+    /**
+     * FLY mode fan: 9 full-length rays evenly spread from 85 degrees up to 85 degrees down.
+     * Same index layout as RAY_ANGLES (centre, then pairs outward, then down/up).
+     */
+    static final double[] FLY_RAY_ANGLES = {0, -21.25, 21.25, -42.5, 42.5, -63.75, 63.75, 85, -85};
+    private static final int[] FLY_RAY_LENGTHS = {RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH};
+    static final int FLOOR_RAY = 7;   // belly sensor
+    static final int CEILING_RAY = 8; // canopy sensor
+    
     public static RayResult[] castRays(double planeX, double planeY, ArrayList<GamePanel.Obstacle> obstacles) {
+        return castRays(planeX, planeY, 0.0, obstacles);
+    }
+    
+    /**
+     * Cast the sensor fan relative to the plane's pitch.
+     * @param pitchDeg plane pitch in degrees, positive = nose up (rotates every ray upward)
+     */
+    public static RayResult[] castRays(double planeX, double planeY, double pitchDeg, ArrayList<GamePanel.Obstacle> obstacles) {
+        return castRays(planeX, planeY, pitchDeg, obstacles, false);
+    }
+    
+    /**
+     * @param boundsOnAllRays when true every ray sees the floor and ceiling (needed in FLY mode,
+     *                        where steep pitch swings the belly/canopy rays nearly horizontal)
+     */
+    public static RayResult[] castRays(double planeX, double planeY, double pitchDeg, ArrayList<GamePanel.Obstacle> obstacles,
+                                       boolean boundsOnAllRays) {
+        return castRays(planeX, planeY, pitchDeg, obstacles, boundsOnAllRays, RAY_ANGLES, RAY_LENGTHS);
+    }
+    
+    /** FLY mode sensors: the wide +/-85 degree fan, every ray seeing floor and ceiling. */
+    public static RayResult[] castFlyRays(double planeX, double planeY, double pitchDeg, ArrayList<GamePanel.Obstacle> obstacles) {
+        return castRays(planeX, planeY, pitchDeg, obstacles, true, FLY_RAY_ANGLES, FLY_RAY_LENGTHS);
+    }
+    
+    private static RayResult[] castRays(double planeX, double planeY, double pitchDeg, ArrayList<GamePanel.Obstacle> obstacles,
+                                        boolean boundsOnAllRays, double[] angles, int[] rayLengths) {
         RayResult[] results = new RayResult[9];
         
-        // Ray angles in degrees - evenly spread forward
-        double[] angles = {0, -15, 15, -30, 30, -45, 45, 90, -90};
-        // Rays 7-8 (straight down, straight up) are shorter
-        int[] rayLengths = {RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH, RAY_LENGTH / 3, RAY_LENGTH / 3};
-        
         for (int i = 0; i < 9; i++) {
-            results[i] = castRay(planeX, planeY, angles[i], obstacles, rayLengths[i]);
+            // Screen y points down, so nose-up pitch subtracts from the screen angle
+            double worldAngle = angles[i] - pitchDeg;
+            results[i] = castRay(planeX, planeY, worldAngle, i, obstacles, rayLengths[i], boundsOnAllRays);
         }
         
         return results;
     }
     
-    private static RayResult castRay(double startX, double startY, double angleDegrees, ArrayList<GamePanel.Obstacle> obstacles, int maxLength) {
+    private static RayResult castRay(double startX, double startY, double angleDegrees, int rayIndex, ArrayList<GamePanel.Obstacle> obstacles, int maxLength,
+                                     boolean boundsOnAllRays) {
         double angleRad = Math.toRadians(angleDegrees);
         double dx = Math.cos(angleRad);
         double dy = Math.sin(angleRad);
@@ -50,19 +87,18 @@ public class RaycastSensor {
             double y = startY + dy * dist;
             
             // Check screen boundaries
-            // Upward rays (negative angles) ignore top boundary, except straight up (-90)
-            // Only downward ray (90 degrees) detects bottom boundary
-            // All rays detect side boundaries
+            // All rays detect side boundaries.
+            // Only the canopy ray detects the top boundary, only the belly ray the bottom,
+            // unless boundsOnAllRays (FLY mode), where every ray sees floor and ceiling.
+            // (Roles are by sensor, so they still work when the fan is rotated by pitch.)
             boolean hitBoundary = false;
             
             if (x < 0 || x >= 320) {
                 hitBoundary = true; // Side boundaries
-            } else if (angleDegrees >= 0 && y < 0) {
-                hitBoundary = true; // Top boundary (only for non-upward rays)
-            } else if (angleDegrees == -90 && y < 0) {
-                hitBoundary = true; // Top boundary (for straight up ray)
-            } else if (angleDegrees == 90 && y >= 240) {
-                hitBoundary = true; // Bottom boundary (only for downward ray)
+            } else if ((boundsOnAllRays || rayIndex == CEILING_RAY) && y < 0) {
+                hitBoundary = true; // Top boundary
+            } else if ((boundsOnAllRays || rayIndex == FLOOR_RAY) && y >= 240) {
+                hitBoundary = true; // Bottom boundary
             }
             
             if (hitBoundary) {

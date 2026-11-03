@@ -40,11 +40,23 @@ public class AppWindow extends JFrame {
             }
         });
 
+        // Toggle between pitch-controlled flight and classic hops
+        JButton flightModeButton = new JButton();
+        flightModeButton.setFocusable(false); // keep keyboard focus on the game panel
+        flightModeButton.setToolTipText("Switch between Fly (pitch control) and Bouncy (hop) modes");
+        flightModeButton.addActionListener(e -> {
+            FlightMode mode = gamePanel.toggleFlightMode();
+            flightModeButton.setText(flightModeLabel(mode));
+            gamePanel.requestFocusInWindow();
+        });
+
         topNavBits.add(skipButton);
+        topNavBits.add(flightModeButton);
         topNavBits.add(exitButton);
         add(topNavBits, BorderLayout.NORTH);
 
         gamePanel = new GamePanel();
+        flightModeButton.setText(flightModeLabel(gamePanel.getFlightMode()));
         gamePanel.addMouseListener(new MouseListener() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -115,6 +127,10 @@ public class AppWindow extends JFrame {
 
     private void toggleNavVisible() {
         this.topNavBits.setVisible(!this.topNavBits.isVisible());
+    }
+    
+    static String flightModeLabel(FlightMode mode) {
+        return "Mode: " + mode.label();
     }
     
     public void updateGame() {

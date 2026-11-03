@@ -109,9 +109,23 @@ public class GamePanel extends JPanel {
     private boolean aiLearningMode = true; // Default to ML mode
     private EvolutionManager evolutionManager = null;
     
+    // Flight mode - FLY (pitch control) is the default. Each mode keeps its own
+    // population because brains trained for one physics model are useless in the other.
+    private volatile FlightMode flightMode = FlightMode.FLY;
+    private final java.util.EnumMap<FlightMode, EvolutionManager> evolutionByMode = new java.util.EnumMap<>(FlightMode.class);
+    // Classic/manual plane attitude in FLY mode (planeY/planeVelY remain the source of truth for position)
+    private final FlightBody playerBody = new FlightBody();
+    private boolean pitchUpHeld = false;
+    private boolean pitchDownHeld = false;
+    
+    // Super training: replay the same course from a few obstacles before the crash point
+    private volatile boolean superTraining = false;
+    private final TrainingCourse trainingCourse = new TrainingCourse();
+    
     // Render optimizations
     private BufferedImage[][] colorFramesCache;
     private BufferedImage[] flippedPlaneCache;
+    private final java.util.Random spawnRandom = new java.util.Random();
 
     public GamePanel() {
         setPreferredSize(new Dimension(320, 240));
@@ -151,6 +165,9 @@ public class GamePanel extends JPanel {
                     // Console output removed
                 } else if (e.getKeyCode() == KeyEvent.VK_N) {
                     showNetwork = !showNetwork;
+                } else if (e.getKeyCode() == KeyEvent.VK_S) {
+                    // Takes effect when the current generation ends
+                    superTraining = !superTraining;
                 } else if (e.getKeyCode() == KeyEvent.VK_A) {
                     aiLearningMode = !aiLearningMode;
                     // Console output removed
@@ -164,8 +181,20 @@ public class GamePanel extends JPanel {
                         fastForwardStartGen = evolutionManager.getGeneration();
                         // Console output removed
                     }
-                } else if (e.getKeyCode() == KeyEvent.VK_SPACE) {
-                    if (isWorking && !isGameOver && !spacePressed && !landingSequenceActive && planeY > 15) {
+                } else if (e.getKeyCode() == KeyEvent.VK_SPACE || e.getKeyCode() == KeyEvent.VK_UP
+                        || e.getKeyCode() == KeyEvent.VK_DOWN) {
+                    if (flightMode == FlightMode.FLY) {
+                        // Fly: SPACE/UP pull the nose up, DOWN pushes it down, while held
+                        if (isWorking && !isGameOver && !landingSequenceActive) {
+                            isManualControl = true;
+                            if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+                                pitchDownHeld = true;
+                            } else {
+                                pitchUpHeld = true;
+                            }
+                        }
+                    } else if (e.getKeyCode() == KeyEvent.VK_SPACE
+                            && isWorking && !isGameOver && !spacePressed && !landingSequenceActive && planeY > 15) {
                         isManualControl = true;
                         // Jump - halfway between -3 and -6
                         planeVelY = -4.5;
@@ -178,6 +207,11 @@ public class GamePanel extends JPanel {
             public void keyReleased(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_SPACE) {
                     spacePressed = false;
+                    pitchUpHeld = false;
+                } else if (e.getKeyCode() == KeyEvent.VK_UP) {
+                    pitchUpHeld = false;
+                } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+                    pitchDownHeld = false;
                 }
             }
         });
@@ -494,18 +528,26 @@ public class GamePanel extends JPanel {
             if (!platformSpawned) {
                 // Calculate max obstacles based on time: 2 for first 3s, 3 for next 3s, etc.
                 // 30% faster difficulty ramp: increase every 2.3 seconds instead of 3
-                int maxObstacles = 2 + (int)(secondsElapsed / 2.3);
+                int maxObstacles = AISimulation.maxObstacles(secondsElapsed);
                 
                 // Count only obstacles ahead of the player
                 int planeX = 80;
                 long obstaclesAhead = obstacles.stream().filter(obs -> obs.x + PIPE_WIDTH > planeX).count();
                 
                 // Much faster spawn ramp: reach 24 frames in 30 seconds (30 * 60 / 96 = 18.75)
-                int spawnInterval = Math.max(24, 120 - (frameCounter / 19));
+                int spawnInterval = AISimulation.spawnInterval(frameCounter);
                 
-                if (spawnTimer >= spawnInterval && obstaclesAhead < maxObstacles) {
-                    int gapY = 50 + (int)(Math.random() * 120);
-                    obstacles.add(new Obstacle(320 + PIPE_WIDTH, gapY));
+                boolean trainingAI = aiLearningMode && evolutionManager != null;
+                if (trainingAI && trainingCourse.isReplaying()) {
+                    // Super training: replay the recorded course with its original timing
+                    Obstacle replayed = trainingCourse.nextReplay(frameCounter);
+                    if (replayed != null) {
+                        obstacles.add(replayed);
+                        spawnTimer = 0;
+                    }
+                } else if (spawnTimer >= spawnInterval && obstaclesAhead < maxObstacles) {
+                    int gapY = AISimulation.randomGapY(spawnRandom);
+                    obstacles.add(trainingAI ? trainingCourse.record(gapY, frameCounter) : new Obstacle(320 + PIPE_WIDTH, gapY));
                     spawnTimer = 0;
                 }
             }
@@ -525,6 +567,7 @@ public class GamePanel extends JPanel {
                 obs.x -= 3;
                 if (!obs.scored && obs.x + PIPE_WIDTH < 80) {
                     obs.scored = true;
+                    trainingCourse.markPassed(obs);
                     if (aiLearningMode && evolutionManager != null) {
                         // Score only alive planes - each plane gets points individually when they pass
                         for (AIPlane plane : evolutionManager.getPopulation()) {
@@ -578,50 +621,45 @@ public class GamePanel extends JPanel {
             
             // ML Learning Mode
             if (aiLearningMode && evolutionManager != null) {
-                // Update all AI planes
-                for (AIPlane plane : evolutionManager.getPopulation()) {
-                    if (plane.alive) {
-                        RaycastSensor.RayResult[] rays = RaycastSensor.castRays(
-                            planeX + planeWidth/2, plane.y + planeHeight/2, obstacles);
-                        plane.update(rays, planeHeight, targetY, targetDistance, target2Y, target2Distance);
-                        
-                        // Check collisions
-                        for (Obstacle obs : obstacles) {
-                            plane.checkCollision(obs, planeX, planeWidth, planeHeight);
-                        }
-                    }
-                }
+                // Sense, think, move and collide all AI planes (shared with the headless trainer)
+                AISimulation.stepPopulation(evolutionManager.getPopulation(), obstacles, flightMode);
                 
                 // Use first plane's raycast for visualization
                 if (!evolutionManager.getPopulation().isEmpty()) {
                     AIPlane firstPlane = evolutionManager.getPopulation().get(0);
-                    currentRays = RaycastSensor.castRays(
-                        planeX + planeWidth/2, firstPlane.y + planeHeight/2, obstacles);
+                    currentRays = AISimulation.castSensors(
+                        planeX + planeWidth/2, firstPlane.y + planeHeight/2, firstPlane, flightMode, obstacles);
                 }
                 
                 // Check if generation is complete
                 if (evolutionManager.allDead()) {
-                    int oldGen = evolutionManager.getGeneration();
                     evolutionManager.evolveNextGeneration();
                     int newGen = evolutionManager.getGeneration();
                     
                     // Check if fast-forward is complete
                     if (fastForwardMode) {
                         int progress = newGen - fastForwardStartGen;
-                        // Console output removed
                         
                         if (progress >= 50) {
                             fastForwardMode = false;
                             turboMode = wasTurboMode;
-                            // Console output removed
                         }
-                    } else {
-                        // Console output removed
                     }
                     
-                    // Reset game state for new generation
+                    // Reset game state for new generation. Super training restarts a few
+                    // obstacles before the crash point on the same course; normal starts fresh.
                     obstacles.clear();
-                    frameCounter = 0;
+                    if (superTraining) {
+                        frameCounter = trainingCourse.beginRewound();
+                        // Credit fitness from the rewind point, by frames and by obstacles already cleared
+                        for (AIPlane plane : evolutionManager.getPopulation()) {
+                            plane.startOffset = frameCounter;
+                            plane.startObstacleOffset = trainingCourse.getStartIndex();
+                        }
+                    } else {
+                        trainingCourse.beginFresh();
+                        frameCounter = 0;
+                    }
                     spawnTimer = 0;
                 }
                 
@@ -631,7 +669,8 @@ public class GamePanel extends JPanel {
             // Classic AI Mode (original logic)
             
             // Calculate raycasts for visualization and future AI use
-            currentRays = RaycastSensor.castRays(planeX + planeWidth/2, planeY + planeHeight/2, obstacles);
+            currentRays = AISimulation.castSensors(planeX + planeWidth/2, planeY + planeHeight/2,
+                playerBody, flightMode, obstacles);
             
             Obstacle nextObs = null;
             for (Obstacle obs : obstacles) {
@@ -641,36 +680,57 @@ public class GamePanel extends JPanel {
             }
 
             // AI or manual control
-            if (!isManualControl) {
-                // AI control
-                if (platformSpawned && platformX < 100) {
-                    targetY = cachedLandingY;
-                } else if (nextObs != null) {
-                    targetY = nextObs.gapY;
+            if (flightMode == FlightMode.FLY) {
+                double control;
+                if (isManualControl) {
+                    control = (pitchUpHeld ? 1.0 : 0.0) - (pitchDownHeld ? 1.0 : 0.0);
                 } else {
-                    targetY = 100;
+                    if (platformSpawned && platformX < 100) {
+                        targetY = cachedLandingY;
+                    } else if (nextObs != null) {
+                        targetY = nextObs.gapY - planeHeight / 2.0;
+                    } else {
+                        targetY = 100;
+                    }
+                    control = autopilotControl(playerBody, planeY, planeVelY, targetY);
                 }
+                playerBody.y = planeY;
+                playerBody.velY = planeVelY;
+                playerBody.stepFly(control);
+                planeY = playerBody.y;
+                planeVelY = playerBody.velY;
+            } else {
+                if (!isManualControl) {
+                    // AI control
+                    if (platformSpawned && platformX < 100) {
+                        targetY = cachedLandingY;
+                    } else if (nextObs != null) {
+                        targetY = nextObs.gapY;
+                    } else {
+                        targetY = 100;
+                    }
 
-                jumpTimer++;
-                if (jumpTimer > 12) {
-                    double predictedY = planeY + planeVelY * 8;
-                    // Only jump if target is above us or we're falling too far below target, and not too high
-                    if ((predictedY > targetY + 15 || planeY > targetY + 10) && targetY < planeY && planeY > 15) {
-                        planeVelY = JUMP_STRENGTH;
-                        jumpTimer = 0;
+                    jumpTimer++;
+                    if (jumpTimer > 12) {
+                        double predictedY = planeY + planeVelY * 8;
+                        // Only jump if target is above us or we're falling too far below target, and not too high
+                        if ((predictedY > targetY + 15 || planeY > targetY + 10) && targetY < planeY && planeY > 15) {
+                            planeVelY = JUMP_STRENGTH;
+                            jumpTimer = 0;
+                        }
                     }
                 }
-            }
 
-            // Physics for both AI and manual
-            planeVelY += GRAVITY;
-            planeY += planeVelY;
+                // Hop physics for both AI and manual
+                planeVelY += GRAVITY;
+                planeY += planeVelY;
 
-            // AI lerp smoothing
-            if (!isManualControl) {
-                double lerpFactor = 0.05;
-                if (planeY > targetY) {
-                    planeY += (targetY - planeY) * lerpFactor;
+                // AI lerp smoothing
+                if (!isManualControl) {
+                    double lerpFactor = 0.05;
+                    if (planeY > targetY) {
+                        planeY += (targetY - planeY) * lerpFactor;
+                    }
                 }
             }
 
@@ -713,61 +773,36 @@ public class GamePanel extends JPanel {
                 planeVelY = 0;
             }
 
-            // Collision detection with triangular mountain peaks
+            // Collision detection with triangular mountain peaks (hitbox rotates with pitch in FLY mode)
+            double collisionPitch = AISimulation.sensorPitch(playerBody, flightMode);
             for (Obstacle obs : obstacles) {
-                if (planeX + planeWidth > obs.x && planeX < obs.x + PIPE_WIDTH) {
-                    int topPipeHeight = obs.gapY - PIPE_GAP/2;
-                    int bottomPipeY = obs.gapY + PIPE_GAP/2;
+                boolean collision = Collision.planeHitsObstacle(planeX, planeY, planeWidth,
+                    flightMode.hitboxWidth, flightMode.hitboxHeight, collisionPitch, obs);
+                
+                if (collision) {
+                    // Console output removed
+                    // Console output removed
+                    // Console output removed
                     
-                    boolean collision = false;
+                    isGameOver = true;
+                    gameOverTimer = 0;
                     
-                    // Top mountain (pointing down) - triangle collision
-                    if (topPipeHeight > 0) {
-                        // Triangle: peak at (obs.x + PIPE_WIDTH/2, topPipeHeight), base from (obs.x, 0) to (obs.x + PIPE_WIDTH, 0)
-                        collision = collision || checkTriangleCollision(
-                            planeX, planeY, planeWidth, planeHeight,
-                            obs.x + PIPE_WIDTH/2, topPipeHeight,  // peak
-                            obs.x, 0,  // base left
-                            obs.x + PIPE_WIDTH, 0  // base right
-                        );
-                    }
-                    
-                    // Bottom mountain (pointing up) - triangle collision
-                    if (bottomPipeY < 240) {
-                        // Triangle: peak at (obs.x + PIPE_WIDTH/2, bottomPipeY), base from (obs.x, 240) to (obs.x + PIPE_WIDTH, 240)
-                        collision = collision || checkTriangleCollision(
-                            planeX, planeY, planeWidth, planeHeight,
-                            obs.x + PIPE_WIDTH/2, bottomPipeY,  // peak
-                            obs.x, 240,  // base left
-                            obs.x + PIPE_WIDTH, 240  // base right
-                        );
-                    }
-                    
-                    if (collision) {
-                        // Console output removed
-                        // Console output removed
-                        // Console output removed
-                        
-                        isGameOver = true;
-                        gameOverTimer = 0;
-                        
-                        // Update high score immediately
-                        if (score > highScore) {
-                            highScore = score;
-                            // Console output removed
-                        }
-                        // Check if score qualifies for high score table
-                        boolean qualifies = highScoreTable.size() < 5 || score > highScoreTable.get(4).score;
-                        // Console output removed
-                        if (qualifies) {
-                            addHighScore(playerName, score);
-                            showNewHighScore = true;
-                            newHighScoreTimer = 0;
-                            newHighScoreValue = score;
-                            // Console output removed
-                        }
+                    // Update high score immediately
+                    if (score > highScore) {
+                        highScore = score;
                         // Console output removed
                     }
+                    // Check if score qualifies for high score table
+                    boolean qualifies = highScoreTable.size() < 5 || score > highScoreTable.get(4).score;
+                    // Console output removed
+                    if (qualifies) {
+                        addHighScore(playerName, score);
+                        showNewHighScore = true;
+                        newHighScoreTimer = 0;
+                        newHighScoreValue = score;
+                        // Console output removed
+                    }
+                    // Console output removed
                 }
             }
         } else if (isLanding) {
@@ -891,13 +926,14 @@ public class GamePanel extends JPanel {
                     BufferedImage planeImg = getNightFilteredImage(frames[currentFrame]);
                     
                     // Draw raycasts behind the plane (only for first plane to reduce overhead)
+                    double drawPitch = AISimulation.sensorPitch(plane, flightMode);
                     if (showRaycasts && plane == firstPlane) {
-                        RaycastSensor.RayResult[] rays = RaycastSensor.castRays(
-                            80 + planeWidth/2, plane.y + planeHeight/2, obstacles);
+                        RaycastSensor.RayResult[] rays = AISimulation.castSensors(
+                            80 + planeWidth/2, plane.y + planeHeight/2, plane, flightMode, obstacles);
                         RaycastSensor.drawRays(g2d, 80 + planeWidth/2, plane.y + planeHeight/2, rays);
                     }
                     
-                    g2d.drawImage(planeImg, 80, (int)plane.y, null);
+                    drawPlaneRotated(g2d, planeImg, 80, plane.y, drawPitch);
                 }
             }
             
@@ -928,7 +964,7 @@ public class GamePanel extends JPanel {
             BufferedImage planeFiltered = getNightFilteredImage(planeFrames[currentFrame]);
             
             if (!isLanding) {
-                g2d.drawImage(planeFiltered, 80, (int)planeY, null);
+                drawPlaneRotated(g2d, planeFiltered, 80, planeY, AISimulation.sensorPitch(playerBody, flightMode));
                 
                 // No raycasts in classic mode (neither AI nor manual)
             } else {
@@ -959,32 +995,30 @@ public class GamePanel extends JPanel {
         drawText(g2d, timeText, 15, 25);
         
         if (aiLearningMode && evolutionManager != null && isWorking) {
-            // ML Mode stats
+            // ML Mode stats (generation counters only make sense while training)
             String genText = "GEN " + evolutionManager.getGeneration();
             drawText(g2d, genText, 15, 45);
             
             String aliveText = "ALIVE " + evolutionManager.getAliveCount();
             drawText(g2d, aliveText, 15, 65);
             
-            // Show best score this generation (right side)
-            String scoreText = String.format("%05d", evolutionManager.getBestScoreThisGen());
-            int scoreWidth = getTextWidth(scoreText);
-            drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
-            
-            // Show all-time high score (center)
-            String highScoreText = "HI " + String.format("%05d", evolutionManager.getBestScoreEver());
-            int hsWidth = getTextWidth(highScoreText);
-            drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
-        } else {
-            // Classic mode score
-            String scoreText = String.format("%05d", score);
-            int scoreWidth = getTextWidth(scoreText);
-            drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
-            
-            String highScoreText = "HI " + String.format("%05d", highScore);
-            int hsWidth = getTextWidth(highScoreText);
-            drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
+            if (superTraining) {
+                // Which obstacle of the recorded course this generation started from,
+                // and how many rewinds in a row have failed to get past the hardest one.
+                // Right-aligned under the score so it stays clear of the planes.
+                String superText = "SUPER " + trainingCourse.getStartIndex() + " TRY " + trainingCourse.getStuckRewinds();
+                drawText(g2d, superText, 320 - getTextWidth(superText) - 15, 45);
+            }
         }
+        
+        // Score (right) and all-time high (centre) - same source during work and break
+        String scoreText = String.format("%05d", getHudScore());
+        int scoreWidth = getTextWidth(scoreText);
+        drawText(g2d, scoreText, 320 - scoreWidth - 15, 25);
+        
+        String highScoreText = "HI " + String.format("%05d", getHudHighScore());
+        int hsWidth = getTextWidth(highScoreText);
+        drawText(g2d, highScoreText, (320 - hsWidth) / 2, 25);
         
         // Draw scrolling high score table during break
         if (!isWorking) {
@@ -1077,21 +1111,17 @@ public class GamePanel extends JPanel {
         showIntro = true;
         // Don't reset night mode - it persists across games
         
-        // Initialize evolution manager for ML mode (only if not already created)
+        // Initialize evolution manager for ML mode (one population per flight mode, created lazily)
         if (aiLearningMode) {
-            if (evolutionManager == null) {
-                evolutionManager = new EvolutionManager();
-                // Console output removed
-                // Console output removed
-            } else {
-                // Console output removed
-                // Console output removed
-            }
+            evolutionManager = evolutionByMode.computeIfAbsent(flightMode, m -> new EvolutionManager());
         } else {
+            evolutionByMode.clear();
             evolutionManager = null;
-            // Console output removed
-            // Console output removed
         }
+        playerBody.resetFlight(planeY);
+        pitchUpHeld = false;
+        pitchDownHeld = false;
+        trainingCourse.beginFresh();
         
         String[] colors = {"Blue", "Green", "Red", "Yellow"};
         String[] terrains = {"Grass", "Ice", "Snow"};
@@ -1143,6 +1173,65 @@ public class GamePanel extends JPanel {
     
     public void setSpeedMultiplier(int multiplier) {
         this.speedMultiplier = Math.max(1, multiplier);
+    }
+    
+    public FlightMode getFlightMode() {
+        return flightMode;
+    }
+    
+    /** Score shown on the HUD: the AI's best this generation in learning mode, else the player's. */
+    int getHudScore() {
+        if (aiLearningMode && evolutionManager != null) {
+            return evolutionManager.getBestScoreThisGen();
+        }
+        return score;
+    }
+    
+    /**
+     * All-time high shown on the HUD. In learning mode this is the AI's record, including
+     * the generation still in progress (the record itself only updates when a generation ends).
+     */
+    int getHudHighScore() {
+        if (aiLearningMode && evolutionManager != null) {
+            return Math.max(evolutionManager.getBestScoreEver(), evolutionManager.getBestScoreThisGen());
+        }
+        return highScore;
+    }
+    
+    /** Switch between FLY and BOUNCY. Restarts the current work round so the new physics apply cleanly. */
+    public void setFlightMode(FlightMode mode) {
+        if (mode == null || mode == flightMode) return;
+        flightMode = mode;
+        if (fastForwardMode) {
+            // Fast-forward counts generations of the previous mode's population
+            fastForwardMode = false;
+            turboMode = wasTurboMode;
+        }
+        if (isWorking) {
+            startWork();
+        }
+    }
+    
+    public FlightMode toggleFlightMode() {
+        setFlightMode(flightMode.toggle());
+        return flightMode;
+    }
+    
+    EvolutionManager getEvolutionManager() {
+        return evolutionManager;
+    }
+    
+    public boolean isSuperTraining() {
+        return superTraining;
+    }
+    
+    /** Super training takes effect from the next generation. */
+    public void setSuperTraining(boolean enabled) {
+        superTraining = enabled;
+    }
+    
+    TrainingCourse getTrainingCourse() {
+        return trainingCourse;
     }
     
     public void setNightMode(String mode) {
@@ -1200,6 +1289,7 @@ public class GamePanel extends JPanel {
         isLanding = true;
         landingProgress = 0;
         planeVelY = 0;
+        playerBody.resetFlight(planeY);
         scrollX = 0;
         groundScrollX = 0;
         highScoreScrollX = 320;
@@ -1429,6 +1519,65 @@ public class GamePanel extends JPanel {
         drawText(g2d, text, x, y, false);
     }
     
+    /** Draw a plane sprite rotated about its centre; positive pitch tilts the nose up. */
+    private void drawPlaneRotated(Graphics2D g2d, BufferedImage img, int x, double y, double pitchDeg) {
+        if (pitchDeg == 0.0) {
+            g2d.drawImage(img, x, (int) y, null);
+            return;
+        }
+        // Rotate in software and blit unrotated. Rotating via g2d.rotate() on the accelerated
+        // (XRender/OpenGL) pipeline samples a shared scratch surface past the sprite's edges,
+        // which leaked bits of previously drawn obstacle sprites into the sky around planes.
+        BufferedImage rotated = rotatedSpriteCache.computeIfAbsent(
+            new RotatedSpriteKey(img, (int) Math.round(pitchDeg)), k -> rotateSprite(k.image, k.degrees));
+        int pad = (rotated.getWidth() - img.getWidth()) / 2;
+        g2d.drawImage(rotated, x - pad, (int) y - pad, null);
+    }
+    
+    private record RotatedSpriteKey(BufferedImage image, int degrees) {}
+    
+    /** Small LRU cache: 4 colours x 3 frames x up to 171 angles, plus night-filter variants. */
+    private final java.util.Map<RotatedSpriteKey, BufferedImage> rotatedSpriteCache =
+        new java.util.LinkedHashMap<>(256, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(java.util.Map.Entry<RotatedSpriteKey, BufferedImage> eldest) {
+                return size() > 2048;
+            }
+        };
+    
+    /**
+     * Returns the sprite rotated about its centre (positive = nose up) on a transparent,
+     * square canvas padded so no rotated pixel is clipped. Draw it offset by
+     * (result.width - src.width) / 2 to keep the same centre.
+     */
+    static BufferedImage rotateSprite(BufferedImage src, double pitchDeg) {
+        int w = src.getWidth(), h = src.getHeight();
+        int size = (int) Math.ceil(Math.hypot(w, h)) + 2;
+        if ((size - w) % 2 != 0) size++; // keep padding symmetric
+        BufferedImage out = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        g.rotate(Math.toRadians(-pitchDeg), size / 2.0, size / 2.0);
+        g.drawImage(src, (size - w) / 2, (size - h) / 2, null);
+        g.dispose();
+        return out;
+    }
+    
+    /**
+     * Simple PD autopilot for the classic (non-learning) plane in FLY mode:
+     * pick a climb/descent rate toward the target, convert it to a pitch, then
+     * steer the pitch with damping so it eases in like a real pilot would.
+     */
+    static double autopilotControl(FlightBody body, double y, double velY, double targetY) {
+        double desiredVelY = Math.max(-2.5, Math.min(2.5, (targetY - y) * 0.06));
+        double sinPitch = Math.max(-1.0, Math.min(1.0, -desiredVelY / Math.max(1.0, body.airspeed)));
+        double desiredPitch = Math.max(-FlightBody.MAX_PITCH_DEG,
+            Math.min(FlightBody.MAX_PITCH_DEG, Math.toDegrees(Math.asin(sinPitch))));
+        // Lead the flight path: correct for the vertical velocity we have but don't want
+        desiredPitch += (velY - desiredVelY) * 6.0;
+        return Math.max(-1.0, Math.min(1.0, (desiredPitch - body.pitch) * 0.08 - body.pitchRate * 0.6));
+    }
+    
     private void drawText(Graphics2D g2d, String text, int x, int y, boolean redTint) {
         int currentX = x;
         for (char c : text.toCharArray()) {
@@ -1520,6 +1669,8 @@ public class GamePanel extends JPanel {
     static class Obstacle {
         int x, gapY;
         boolean scored = false;
+        /** Position in the recorded training course (-1 if not recorded). */
+        int courseIndex = -1;
         Obstacle(int x, int gapY) {
             this.x = x;
             this.gapY = gapY;
@@ -1634,37 +1785,6 @@ public class GamePanel extends JPanel {
             HighScoreEntry entry = highScoreTable.get(i);
             // Console output removed
         }
-    }
-    
-    private boolean checkTriangleCollision(double rectX, double rectY, double rectW, double rectH,
-                                           double tx1, double ty1, double tx2, double ty2, double tx3, double ty3) {
-        // Check if any corner of the rectangle is inside the triangle
-        if (pointInTriangle(rectX, rectY, tx1, ty1, tx2, ty2, tx3, ty3)) return true;
-        if (pointInTriangle(rectX + rectW, rectY, tx1, ty1, tx2, ty2, tx3, ty3)) return true;
-        if (pointInTriangle(rectX, rectY + rectH, tx1, ty1, tx2, ty2, tx3, ty3)) return true;
-        if (pointInTriangle(rectX + rectW, rectY + rectH, tx1, ty1, tx2, ty2, tx3, ty3)) return true;
-        
-        // Check if any triangle vertex is inside the rectangle
-        if (tx1 >= rectX && tx1 <= rectX + rectW && ty1 >= rectY && ty1 <= rectY + rectH) return true;
-        if (tx2 >= rectX && tx2 <= rectX + rectW && ty2 >= rectY && ty2 <= rectY + rectH) return true;
-        if (tx3 >= rectX && tx3 <= rectX + rectW && ty3 >= rectY && ty3 <= rectY + rectH) return true;
-        
-        return false;
-    }
-    
-    private boolean pointInTriangle(double px, double py, double x1, double y1, double x2, double y2, double x3, double y3) {
-        double d1 = sign(px, py, x1, y1, x2, y2);
-        double d2 = sign(px, py, x2, y2, x3, y3);
-        double d3 = sign(px, py, x3, y3, x1, y1);
-        
-        boolean hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-        boolean hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
-        
-        return !(hasNeg && hasPos);
-    }
-    
-    private double sign(double px, double py, double x1, double y1, double x2, double y2) {
-        return (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
     }
     
     private void loadHighScore() {

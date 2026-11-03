@@ -17,15 +17,19 @@ public class EvolutionManager {
     private List<Double> fitnessHistory; // Track fitness over time
     
     public EvolutionManager() {
+        this(new Random());
+    }
+    
+    public EvolutionManager(Random rand) {
         this.population = new ArrayList<>();
         this.generation = 1;
         this.bestFitnessEver = 0;
-        this.rand = new Random();
+        this.rand = rand;
         this.fitnessHistory = new ArrayList<>();
         
         // Initialize first generation with random brains
         for (int i = 0; i < POPULATION_SIZE; i++) {
-            population.add(new AIPlane(i % 4)); // Cycle through 4 colors
+            population.add(new AIPlane(i % 4, new NeuralNetwork(rand))); // Cycle through 4 colors
         }
     }
     

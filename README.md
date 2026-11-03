@@ -51,7 +51,8 @@ java -jar PomatoTimer.jar 50 10  # 50 min work, 10 min break
 - The AI demonstrates optimal gameplay and evolves over generations
 
 **Work Phase (Manual Mode)**
-- Press **SPACE** to take control and jump
+- **Fly mode (default)**: hold **SPACE** or **UP** to pull the nose up, **DOWN** to push it down
+- **Bouncy mode**: press **SPACE** to hop
 - Navigate through mountain obstacles
 - Avoid hitting the top/bottom of the screen
 - Each obstacle passed earns 10 points
@@ -64,14 +65,17 @@ java -jar PomatoTimer.jar 50 10  # 50 min work, 10 min break
 
 ### Controls
 
-- **SPACE** - Jump (take manual control during work phase)
+- **SPACE** - Fly: pitch up while held / Bouncy: jump (takes manual control during work phase)
+- **UP / DOWN** - Fly mode: pitch up / pitch down while held
 - **T** - Toggle turbo mode (fast rendering for AI training)
 - **B** - Toggle background rendering on/off
 - **F** - Toggle fullscreen mode
 - **R** - Toggle raycast visualization on/off
 - **N** - Toggle neural network visualization on/off
 - **A** - Toggle between AI learning mode and classic mode
-- **Click anywhere** - Show/hide Skip and Exit buttons
+- **S** - Toggle super training (off by default). When a generation ends, the next one replays the same course from 5 obstacles before the crash point, after a short obstacle-free settle. If it fails to get past the same obstacle for more than 100 rewinds, it gives up and starts a fresh course from the beginning. The HUD shows `SUPER <start obstacle> TRY <rewinds stuck>`.
+- **Click anywhere** - Show/hide the Skip, Mode and Exit buttons
+- **Mode button** - Switch between **Fly** (default) and **Bouncy** flight modes. Each mode trains its own AI population, so switching back resumes where it left off.
 
 ### Features
 
@@ -134,8 +138,17 @@ The compiled JAR will be in `target/PomatoTimer-1.0-SNAPSHOT-jar-with-dependenci
 
 ### Physics
 
+**Fly mode (default)** - arcade flight with light physics:
+- Stick input drives pitch through angular inertia (max ±85° - steep swoops, never fully vertical; agile, reaching 30° in ~7 frames and full pitch in ~13)
+- The flight path follows the nose with lag, giving a floaty, momentum-carrying feel
+- Climbing bleeds airspeed and diving builds it; below cruise speed lift fades and gravity pulls the plane down
+- The hitbox and the AI's raycast sensors rotate with the plane's pitch; in Fly mode the 9 rays fan evenly from 85° up to 85° down (Bouncy keeps the original ±45° fan plus straight up/down) and every ray sees the floor and ceiling
+
+**Bouncy mode** - classic hops:
 - **Gravity**: 0.5 pixels/frame²
 - **Jump Strength**: -4.5 pixels/frame
+
+Both modes:
 - **Scroll Speed**: 3 pixels/frame
 - **Plane Position**: Fixed at X=80
 

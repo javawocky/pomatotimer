@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class NeuralNetworkTest {
     
-    // 15 inputs: 9 raycasts + 5 target inputs + 1 velocity
-    private static final int INPUT_SIZE = 15;
+    // 17 inputs: 9 raycasts + 5 target inputs + 1 velocity + 2 attitude (pitch, pitch rate)
+    private static final int INPUT_SIZE = NeuralNetwork.INPUT_SIZE;
     
     private double[] makeInputs(double value) {
         double[] inputs = new double[INPUT_SIZE];
@@ -16,7 +16,20 @@ public class NeuralNetworkTest {
     }
     
     private double[] makeSampleInputs() {
-        return new double[]{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5};
+        return new double[]{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.0};
+    }
+    
+    @Test
+    public void testInputSizeIncludesAttitude() {
+        assertEquals(17, INPUT_SIZE, "9 rays + 5 targets + velocity + pitch + pitch rate");
+        assertEquals(INPUT_SIZE, makeSampleInputs().length);
+    }
+    
+    @Test
+    public void testSeededNetworksAreReproducible() {
+        double[] inputs = makeSampleInputs();
+        assertEquals(new NeuralNetwork(new Random(7)).predict(inputs),
+            new NeuralNetwork(new Random(7)).predict(inputs), 1e-12);
     }
     
     @Test
@@ -46,7 +59,7 @@ public class NeuralNetworkTest {
     @Test
     public void testPredictWithWrongInputSize() {
         NeuralNetwork nn = new NeuralNetwork();
-        double[] inputs = {0.5, 0.5, 0.5}; // Only 3 inputs instead of 15
+        double[] inputs = {0.5, 0.5, 0.5}; // Only 3 inputs instead of 17
         assertThrows(IllegalArgumentException.class, () -> nn.predict(inputs));
     }
     

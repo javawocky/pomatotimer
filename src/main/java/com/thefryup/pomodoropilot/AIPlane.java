@@ -1,8 +1,6 @@
 package com.thefryup.pomodoropilot;
 
-public class AIPlane {
-    public double y;
-    public double velY;
+public class AIPlane extends FlightBody {
     public int score;
     public int survivalTime;
     public boolean alive;
@@ -13,25 +11,20 @@ public class AIPlane {
     public double targetDistance = 0; // Distance to target
     public double target2Y = 120; // Second target Y position
     public double target2Distance = 0; // Distance to second target
-    
-    private static final double GRAVITY = 0.5;
-    private static final double JUMP_STRENGTH = -4.5;
-    private static final int JUMP_COOLDOWN_FRAMES = 12;
+    /** Last stick input in FLY mode (-1..1), kept for visualisation. */
+    public double lastControl = 0;
+    /**
+     * Frames already "survived" to reach this run's start. In super training a run begins
+     * partway along the course, so fitness is credited from the rewind point, not from zero.
+     */
+    public int startOffset = 0;
     
     public AIPlane(int colorIndex) {
-        this.y = 100;
-        this.velY = 0;
-        this.score = 0;
-        this.survivalTime = 0;
-        this.alive = true;
-        this.brain = new NeuralNetwork();
-        this.colorIndex = colorIndex;
-        this.jumpCooldown = 0;
+        this(colorIndex, new NeuralNetwork());
     }
     
     public AIPlane(int colorIndex, NeuralNetwork brain) {
-        this.y = 100;
-        this.velY = 0;
+        resetFlight(100);
         this.score = 0;
         this.survivalTime = 0;
         this.alive = true;
@@ -40,7 +33,13 @@ public class AIPlane {
         this.jumpCooldown = 0;
     }
     
+    /** Bouncy-mode update, kept for backwards compatibility. */
     public void update(RaycastSensor.RayResult[] rays, int planeHeight, double targetY, double targetDistance, double target2Y, double target2Distance) {
+        update(rays, planeHeight, targetY, targetDistance, target2Y, target2Distance, FlightMode.BOUNCY);
+    }
+    
+    public void update(RaycastSensor.RayResult[] rays, int planeHeight, double targetY, double targetDistance,
+                       double target2Y, double target2Distance, FlightMode mode) {
         if (!alive) return;
         
         this.targetY = targetY;
@@ -50,50 +49,15 @@ public class AIPlane {
         
         survivalTime++;
         
-        // Prepare inputs for neural network (9 raycasts + 5 target inputs + 1 velocity)
-        double[] inputs = new double[15];
-        for (int i = 0; i < 9; i++) {
-            inputs[i] = rays[i].distance;
-        }
+        double output = brain.predict(buildInputs(rays, mode));
         
-        // Target height relative to plane (-1 to 1, negative = below target)
-        double heightDiff = (targetY - y) / 120.0; // Normalize to screen height
-        inputs[9] = Math.max(-1.0, Math.min(1.0, heightDiff));
-        
-        // Distance to target (0 to 1, closer = higher value)
-        inputs[10] = Math.max(0.0, Math.min(1.0, 1.0 - (targetDistance / 320.0)));
-        
-        // Second target height relative to plane
-        double heightDiff2 = (target2Y - y) / 120.0;
-        inputs[11] = Math.max(-1.0, Math.min(1.0, heightDiff2));
-        
-        // Distance to second target
-        inputs[12] = Math.max(0.0, Math.min(1.0, 1.0 - (target2Distance / 320.0)));
-        
-        // Slope between first and second target (-1 to 1)
-        double slope = target2Distance > 0 ? (target2Y - targetY) / Math.max(1.0, target2Distance) : 0.0;
-        inputs[13] = Math.max(-1.0, Math.min(1.0, slope / 120.0)); // Normalize by screen height
-        
-        // Y velocity normalized (-1 = max fall, 1 = max jump)
-        // Max fall speed is around 10, max jump is -4.5
-        inputs[14] = Math.max(-1.0, Math.min(1.0, velY / 10.0));
-        
-        // Get decision from neural network
-        double output = brain.predict(inputs);
-        
-        // Jump if output > 0.5 and not too high (no cooldown!)
-        if (output > 0.5 && y > 15) {
-            velY = JUMP_STRENGTH;
-        }
-        
-        // Physics
-        velY += GRAVITY;
-        y += velY;
-        
-        // Check boundaries
-        if (y < 10) {
-            y = 10;
-            velY = 0;
+        if (mode == FlightMode.FLY) {
+            // Sigmoid output 0..1 maps to a stick position -1..1 (0.5 = centred)
+            lastControl = (output - 0.5) * 2.0;
+            stepFly(lastControl);
+        } else {
+            // Jump if output > 0.5 and not too high (no cooldown!)
+            stepBouncy(output > 0.5 && y > 15);
         }
         
         if (y + planeHeight > 240) {
@@ -101,70 +65,77 @@ public class AIPlane {
         }
     }
     
+    double[] buildInputs(RaycastSensor.RayResult[] rays, FlightMode mode) {
+        // 9 raycasts + 5 target inputs + 1 velocity + 2 attitude
+        double[] inputs = new double[NeuralNetwork.INPUT_SIZE];
+        for (int i = 0; i < 9; i++) {
+            inputs[i] = rays[i].distance;
+        }
+        
+        // Target height relative to plane (-1 to 1, negative = below target)
+        double heightDiff = (targetY - y) / 120.0; // Normalize to screen height
+        inputs[9] = clamp(heightDiff, -1.0, 1.0);
+        
+        // Distance to target (0 to 1, closer = higher value)
+        inputs[10] = clamp(1.0 - (targetDistance / 320.0), 0.0, 1.0);
+        
+        // Second target height relative to plane
+        double heightDiff2 = (target2Y - y) / 120.0;
+        inputs[11] = clamp(heightDiff2, -1.0, 1.0);
+        
+        // Distance to second target
+        inputs[12] = clamp(1.0 - (target2Distance / 320.0), 0.0, 1.0);
+        
+        // Slope between first and second target (-1 to 1)
+        double slope = target2Distance > 0 ? (target2Y - targetY) / Math.max(1.0, target2Distance) : 0.0;
+        inputs[13] = clamp(slope / 120.0, -1.0, 1.0); // Normalize by screen height
+        
+        // Y velocity normalized. Bouncy: max fall ~10. Fly: vertical speeds are ~3 px/frame.
+        double velScale = mode == FlightMode.FLY ? 4.0 : 10.0;
+        inputs[14] = clamp(velY / velScale, -1.0, 1.0);
+        
+        // Attitude - always 0 in bouncy mode
+        inputs[15] = clamp(pitch / MAX_PITCH_DEG, -1.0, 1.0);
+        inputs[16] = clamp(pitchRate / MAX_PITCH_RATE, -1.0, 1.0);
+        return inputs;
+    }
+    
+    private static double clamp(double v, double min, double max) {
+        return Math.max(min, Math.min(max, v));
+    }
+    
+    /** Bouncy-mode collision with an axis-aligned square hitbox. */
     public void checkCollision(GamePanel.Obstacle obs, int planeX, int planeWidth, int planeHeight) {
+        checkCollision(obs, planeX, planeWidth, FlightMode.BOUNCY);
+    }
+    
+    public void checkCollision(GamePanel.Obstacle obs, int planeX, int spriteSize, FlightMode mode) {
         if (!alive) return;
-        
-        int PIPE_WIDTH = 50;
-        int PIPE_GAP = 80;
-        
-        if (planeX + planeWidth > obs.x && planeX < obs.x + PIPE_WIDTH) {
-            int topPipeHeight = obs.gapY - PIPE_GAP/2;
-            int bottomPipeY = obs.gapY + PIPE_GAP/2;
-            
-            // Top mountain collision
-            if (topPipeHeight > 0 && checkTriangleCollision(
-                    planeX, y, planeWidth, planeHeight,
-                    obs.x + PIPE_WIDTH/2.0, topPipeHeight,
-                    obs.x, 0,
-                    obs.x + PIPE_WIDTH, 0)) {
-                alive = false;
-            }
-            
-            // Bottom mountain collision
-            if (bottomPipeY < 240 && checkTriangleCollision(
-                    planeX, y, planeWidth, planeHeight,
-                    obs.x + PIPE_WIDTH/2.0, bottomPipeY,
-                    obs.x, 240,
-                    obs.x + PIPE_WIDTH, 240)) {
-                alive = false;
-            }
+        double collisionPitch = mode == FlightMode.FLY ? pitch : 0.0;
+        if (Collision.planeHitsObstacle(planeX, y, spriteSize, mode.hitboxWidth, mode.hitboxHeight, collisionPitch, obs)) {
+            alive = false;
         }
     }
     
-    private boolean checkTriangleCollision(double rectX, double rectY, double rectW, double rectH,
-                                          double x1, double y1, double x2, double y2, double x3, double y3) {
-        double[][] corners = {
-            {rectX, rectY},
-            {rectX + rectW, rectY},
-            {rectX, rectY + rectH},
-            {rectX + rectW, rectY + rectH}
-        };
-        
-        for (double[] corner : corners) {
-            if (pointInTriangle(corner[0], corner[1], x1, y1, x2, y2, x3, y3)) {
-                return true;
-            }
-        }
-        return false;
+    /** Fitness credited per obstacle passed, so clearing a hard one is clearly rewarded. */
+    public static final double OBSTACLE_BONUS = 25.0;
+    /** Obstacles already cleared to reach this run's start (super training rewind point). */
+    public int startObstacleOffset = 0;
+    
+    public int getObstaclesPassed() {
+        return score / 10;
     }
     
-    private boolean pointInTriangle(double px, double py, double x1, double y1, double x2, double y2, double x3, double y3) {
-        double d1 = sign(px, py, x1, y1, x2, y2);
-        double d2 = sign(px, py, x2, y2, x3, y3);
-        double d3 = sign(px, py, x3, y3, x1, y1);
-        
-        boolean hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-        boolean hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
-        
-        return !(hasNeg && hasPos);
-    }
-    
-    private double sign(double px, double py, double x1, double y1, double x2, double y2) {
-        return (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
+    /** Total obstacles cleared on the course this run, counting the rewind head start. */
+    public int getTotalObstaclesPassed() {
+        return startObstacleOffset + getObstaclesPassed();
     }
     
     public double getFitness() {
-        // Simple fitness based on survival time (distance traveled)
-        return survivalTime;
+        // Distance travelled from the course start (startOffset covers rewound super-training runs),
+        // plus a per-obstacle bonus. Both count from the rewind point, so reaching and then clearing
+        // the sticking point scores far higher than dying at the start of the segment - otherwise a
+        // rewound run that starts near the hard obstacle would score almost nothing for passing it.
+        return startOffset + survivalTime + OBSTACLE_BONUS * getTotalObstaclesPassed();
     }
 }
